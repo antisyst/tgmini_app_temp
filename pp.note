@@ -1,0 +1,1388 @@
+components/DisplayData.tsx:
+
+import { isRGB } from '@telegram-apps/sdk-react';
+import { Cell, Checkbox, Section } from '@telegram-apps/telegram-ui';
+import type { FC, ReactNode } from 'react';
+
+import { RGB } from '@/components/RGB/RGB.tsx';
+import { Link } from '@/components/Link/Link.tsx';
+
+import './DisplayData.css';
+
+export type DisplayDataRow =
+  & { title: string }
+  & (
+  | { type: 'link'; value?: string }
+  | { value: ReactNode }
+  )
+
+export interface DisplayDataProps {
+  header?: ReactNode;
+  footer?: ReactNode;
+  rows: DisplayDataRow[];
+}
+
+export const DisplayData: FC<DisplayDataProps> = ({ header, rows }) => (
+  <Section header={header}>
+    {rows.map((item, idx) => {
+      let valueNode: ReactNode;
+
+      if (item.value === undefined) {
+        valueNode = <i>empty</i>;
+      } else {
+        if ('type' in item) {
+          valueNode = <Link to={item.value}>Open</Link>;
+        } else if (typeof item.value === 'string') {
+          valueNode = isRGB(item.value)
+            ? <RGB color={item.value}/>
+            : item.value;
+        } else if (typeof item.value === 'boolean') {
+          valueNode = <Checkbox checked={item.value} disabled/>;
+        } else {
+          valueNode = item.value;
+        }
+      }
+
+      return (
+        <Cell
+          className='display-data__line'
+          subhead={item.title}
+          readOnly
+          multiline={true}
+          key={idx}
+        >
+          <span className='display-data__line-value'>
+            {valueNode}
+          </span>
+        </Cell>
+      );
+    })}
+  </Section>
+);
+
+components/Link.tsx:
+
+import { classNames, useUtils } from '@telegram-apps/sdk-react';
+import { type FC, type MouseEventHandler, useCallback } from 'react';
+import { Link as RouterLink, type LinkProps } from 'react-router-dom';
+
+import './Link.css';
+
+export const Link: FC<LinkProps> = ({
+  className,
+  onClick: propsOnClick,
+  to,
+  ...rest
+}) => {
+  const utils = useUtils();
+
+  const onClick = useCallback<MouseEventHandler<HTMLAnchorElement>>((e) => {
+    propsOnClick?.(e);
+
+    // Compute if target path is external. In this case we would like to open link using
+    // TMA method.
+    let path: string;
+    if (typeof to === 'string') {
+      path = to;
+    } else {
+      const { search = '', pathname = '', hash = '' } = to;
+      path = `${pathname}?${search}#${hash}`;
+    }
+
+    const targetUrl = new URL(path, window.location.toString());
+    const currentUrl = new URL(window.location.toString());
+    const isExternal = targetUrl.protocol !== currentUrl.protocol
+      || targetUrl.host !== currentUrl.host;
+
+    if (isExternal) {
+      e.preventDefault();
+      utils.openLink(targetUrl.toString());
+    }
+  }, [to, propsOnClick, utils]);
+
+  return (
+    <RouterLink
+      {...rest}
+      to={to}
+      onClick={onClick}
+      className={classNames(className, 'link')}
+    />
+  );
+};
+
+components/RGB.tsx:
+
+import { classNames, type RGB as RGBType } from '@telegram-apps/sdk-react';
+import type { FC } from 'react';
+
+import './RGB.css';
+
+export type RGBProps = JSX.IntrinsicElements['div'] & {
+  color: RGBType;
+};
+
+export const RGB: FC<RGBProps> = ({ color, className, ...rest }) => (
+  <span {...rest} className={classNames('rgb', className)}>
+    <i className='rgb__icon' style={{ backgroundColor: color }}/>
+    {color}
+  </span>
+);
+
+components/App.tsx:
+
+import { useIntegration } from '@telegram-apps/react-router-integration';
+import {
+  bindMiniAppCSSVars,
+  bindThemeParamsCSSVars,
+  bindViewportCSSVars,
+  initNavigator, useLaunchParams,
+  useMiniApp,
+  useThemeParams,
+  useViewport,
+} from '@telegram-apps/sdk-react';
+import { AppRoot } from '@telegram-apps/telegram-ui';
+import { type FC, useEffect, useMemo } from 'react';
+import {
+  Navigate,
+  Route,
+  Router,
+  Routes,
+} from 'react-router-dom';
+
+import { routes } from '@/navigation/routes.tsx';
+
+export const App: FC = () => {
+  const lp = useLaunchParams();
+  const miniApp = useMiniApp();
+  const themeParams = useThemeParams();
+  const viewport = useViewport();
+
+  useEffect(() => {
+    return bindMiniAppCSSVars(miniApp, themeParams);
+  }, [miniApp, themeParams]);
+
+  useEffect(() => {
+    return bindThemeParamsCSSVars(themeParams);
+  }, [themeParams]);
+
+  useEffect(() => {
+    return viewport && bindViewportCSSVars(viewport);
+  }, [viewport]);
+
+  // Create a new application navigator and attach it to the browser history, so it could modify
+  // it and listen to its changes.
+  const navigator = useMemo(() => initNavigator('app-navigation-state'), []);
+  const [location, reactNavigator] = useIntegration(navigator);
+
+  // Don't forget to attach the navigator to allow it to control the BackButton state as well
+  // as browser history.
+  useEffect(() => {
+    navigator.attach();
+    return () => navigator.detach();
+  }, [navigator]);
+
+  return (
+    <AppRoot
+      appearance={miniApp.isDark ? 'dark' : 'light'}
+      platform={['macos', 'ios'].includes(lp.platform) ? 'ios' : 'base'}
+    >
+      <Router location={location} navigator={reactNavigator}>
+        <Routes>
+          {routes.map((route) => <Route key={route.path} {...route} />)}
+          <Route path='*' element={<Navigate to='/'/>}/>
+        </Routes>
+      </Router>
+    </AppRoot>
+  );
+};
+
+components/ErrorBoundary.tsx:
+
+import {
+  Component,
+  type ComponentType,
+  type GetDerivedStateFromError,
+  type PropsWithChildren,
+  type ReactNode,
+} from 'react';
+
+export interface ErrorBoundaryProps extends PropsWithChildren {
+  fallback?: ReactNode | ComponentType<{ error: unknown }>;
+}
+
+interface ErrorBoundaryState {
+  error?: unknown;
+}
+
+export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  state: ErrorBoundaryState = {};
+
+  // eslint-disable-next-line max-len
+  static getDerivedStateFromError: GetDerivedStateFromError<ErrorBoundaryProps, ErrorBoundaryState> = (error) => ({ error });
+
+  componentDidCatch(error: Error) {
+    this.setState({ error });
+  }
+
+  render() {
+    const {
+      state: {
+        error,
+      },
+      props: {
+        fallback: Fallback,
+        children,
+      },
+    } = this;
+
+    return 'error' in this.state
+      ? typeof Fallback === 'function'
+        ? <Fallback error={error} />
+        : Fallback
+      : children;
+  }
+}
+
+components/Root.tsx:
+
+import { SDKProvider, useLaunchParams } from '@telegram-apps/sdk-react';
+import { TonConnectUIProvider } from '@tonconnect/ui-react';
+import { type FC, useEffect, useMemo } from 'react';
+
+import { App } from '@/components/App.tsx';
+import { ErrorBoundary } from '@/components/ErrorBoundary.tsx';
+
+const ErrorBoundaryError: FC<{ error: unknown }> = ({ error }) => (
+  <div>
+    <p>An unhandled error occurred:</p>
+    <blockquote>
+      <code>
+        {error instanceof Error
+          ? error.message
+          : typeof error === 'string'
+            ? error
+            : JSON.stringify(error)}
+      </code>
+    </blockquote>
+  </div>
+);
+
+const Inner: FC = () => {
+  const debug = useLaunchParams().startParam === 'debug';
+  const manifestUrl = useMemo(() => {
+    return new URL('tonconnect-manifest.json', window.location.href).toString();
+  }, []);
+
+  // Enable debug mode to see all the methods sent and events received.
+  useEffect(() => {
+    if (debug) {
+      import('eruda').then((lib) => lib.default.init());
+    }
+  }, [debug]);
+
+  return (
+    <TonConnectUIProvider manifestUrl={manifestUrl}>
+      <SDKProvider acceptCustomStyles debug={debug}>
+        <App/>
+      </SDKProvider>
+    </TonConnectUIProvider>
+  );
+};
+
+export const Root: FC = () => (
+  <ErrorBoundary fallback={ErrorBoundaryError}>
+    <Inner/>
+  </ErrorBoundary>
+);
+
+src/navigation/routes.tsx:
+
+import type { ComponentType, JSX } from 'react';
+
+import { IndexPage } from '@/pages/IndexPage/IndexPage';
+import { InitDataPage } from '@/pages/InitDataPage/InitDataPage';
+import { LaunchParamsPage } from '@/pages/LaunchParamsPage/LaunchParamsPage.tsx';
+import { ThemeParamsPage } from '@/pages/ThemeParamsPage/ThemeParamsPage.tsx';
+import { TONConnectPage } from '@/pages/TONConnectPage/TONConnectPage';
+
+interface Route {
+  path: string;
+  Component: ComponentType;
+  title?: string;
+  icon?: JSX.Element;
+}
+
+export const routes: Route[] = [
+  { path: '/', Component: IndexPage },
+  { path: '/init-data', Component: InitDataPage, title: 'Init Data' },
+  { path: '/theme-params', Component: ThemeParamsPage, title: 'Theme Params' },
+  { path: '/launch-params', Component: LaunchParamsPage, title: 'Launch Params' },
+  {
+    path: '/ton-connect',
+    Component: TONConnectPage,
+    title: 'TON Connect',
+    icon: (
+      <svg
+        xmlns="http://www.w3.org/2000/svg"
+        width="100%"
+        height="100%"
+        viewBox="0 0 56 56"
+        fill="none"
+      >
+        <path
+          d="M28 56C43.464 56 56 43.464 56 28C56 12.536 43.464 0 28 0C12.536 0 0 12.536 0 28C0 43.464 12.536 56 28 56Z"
+          fill="#0098EA"
+        />
+        <path
+          d="M37.5603 15.6277H18.4386C14.9228 15.6277 12.6944 19.4202 14.4632 22.4861L26.2644 42.9409C27.0345 44.2765 28.9644 44.2765 29.7345 42.9409L41.5381 22.4861C43.3045 19.4251 41.0761 15.6277 37.5627 15.6277H37.5603ZM26.2548 36.8068L23.6847 31.8327L17.4833 20.7414C17.0742 20.0315 17.5795 19.1218 18.4362 19.1218H26.2524V36.8092L26.2548 36.8068ZM38.5108 20.739L32.3118 31.8351L29.7417 36.8068V19.1194H37.5579C38.4146 19.1194 38.9199 20.0291 38.5108 20.739Z"
+          fill="white"
+        />
+      </svg>
+    ),
+  },
+];
+
+src/pages/IndexPage.tsx:
+
+import { Section, Cell, Image, List } from '@telegram-apps/telegram-ui';
+import type { FC } from 'react';
+
+import { Link } from '@/components/Link/Link.tsx';
+
+import tonSvg from './ton.svg';
+
+export const IndexPage: FC = () => {
+  return (
+    <List>
+      <Section
+        header='Features'
+        footer='You can use these pages to learn more about features, provided by Telegram Mini Apps and other useful projects'
+      >
+        <Link to='/ton-connect'>
+          <Cell
+            before={<Image src={tonSvg} style={{ backgroundColor: '#007AFF' }}/>}
+            subtitle='Connect your TON wallet'
+          >
+            TON Connect
+          </Cell>
+        </Link>
+      </Section>
+      <Section
+        header='Application Launch Data'
+        footer='These pages help developer to learn more about current launch information'
+      >
+        <Link to='/init-data'>
+          <Cell subtitle='User data, chat information, technical data'>Init Data</Cell>
+        </Link>
+        <Link to='/launch-params'>
+          <Cell subtitle='Platform identifier, Mini Apps version, etc.'>Launch Parameters</Cell>
+        </Link>
+        <Link to='/theme-params'>
+          <Cell subtitle='Telegram application palette information'>Theme Parameters</Cell>
+        </Link>
+      </Section>
+    </List>
+  );
+};
+
+src/pages/InitDataPage.tsx:
+
+import { type FC, useMemo } from 'react';
+import { useInitData, useLaunchParams, type User } from '@telegram-apps/sdk-react';
+import { List, Placeholder } from '@telegram-apps/telegram-ui';
+
+import { DisplayData, type DisplayDataRow } from '@/components/DisplayData/DisplayData.tsx';
+
+function getUserRows(user: User): DisplayDataRow[] {
+  return [
+    { title: 'id', value: user.id.toString() },
+    { title: 'username', value: user.username },
+    { title: 'photo_url', value: user.photoUrl },
+    { title: 'last_name', value: user.lastName },
+    { title: 'first_name', value: user.firstName },
+    { title: 'is_bot', value: user.isBot },
+    { title: 'is_premium', value: user.isPremium },
+    { title: 'language_code', value: user.languageCode },
+    { title: 'allows_to_write_to_pm', value: user.allowsWriteToPm },
+    { title: 'added_to_attachment_menu', value: user.addedToAttachmentMenu },
+  ];
+}
+
+export const InitDataPage: FC = () => {
+  const initDataRaw = useLaunchParams().initDataRaw;
+  const initData = useInitData();
+
+  const initDataRows = useMemo<DisplayDataRow[] | undefined>(() => {
+    if (!initData || !initDataRaw) {
+      return;
+    }
+    const {
+      hash,
+      queryId,
+      chatType,
+      chatInstance,
+      authDate,
+      startParam,
+      canSendAfter,
+      canSendAfterDate,
+    } = initData;
+    return [
+      { title: 'raw', value: initDataRaw },
+      { title: 'auth_date', value: authDate.toLocaleString() },
+      { title: 'auth_date (raw)', value: authDate.getTime() / 1000 },
+      { title: 'hash', value: hash },
+      { title: 'can_send_after', value: canSendAfterDate?.toISOString() },
+      { title: 'can_send_after (raw)', value: canSendAfter },
+      { title: 'query_id', value: queryId },
+      { title: 'start_param', value: startParam },
+      { title: 'chat_type', value: chatType },
+      { title: 'chat_instance', value: chatInstance },
+    ];
+  }, [initData, initDataRaw]);
+
+  const userRows = useMemo<DisplayDataRow[] | undefined>(() => {
+    return initData && initData.user ? getUserRows(initData.user) : undefined;
+  }, [initData]);
+
+  const receiverRows = useMemo<DisplayDataRow[] | undefined>(() => {
+    return initData && initData.receiver ? getUserRows(initData.receiver) : undefined;
+  }, [initData]);
+
+  const chatRows = useMemo<DisplayDataRow[] | undefined>(() => {
+    if (!initData?.chat) {
+      return;
+    }
+    const { id, title, type, username, photoUrl } = initData.chat;
+
+    return [
+      { title: 'id', value: id.toString() },
+      { title: 'title', value: title },
+      { title: 'type', value: type },
+      { title: 'username', value: username },
+      { title: 'photo_url', value: photoUrl },
+    ];
+  }, [initData]);
+
+  if (!initDataRows) {
+    return (
+      <Placeholder
+        header="Oops"
+        description="Application was launched with missing init data"
+      >
+        <img
+          alt="Telegram sticker"
+          src="https://xelene.me/telegram.gif"
+          style={{ display: 'block', width: '144px', height: '144px' }}
+        />
+      </Placeholder>
+    );
+  }
+  return (
+    <List>
+      <DisplayData header={'Init Data'} rows={initDataRows}/>
+      {userRows && <DisplayData header={'User'} rows={userRows}/>}
+      {receiverRows && <DisplayData header={'Receiver'} rows={receiverRows}/>}
+      {chatRows && <DisplayData header={'Chat'} rows={chatRows}/>}
+    </List>
+  );
+};
+
+src/pages/LaunchParamsPage.tsx:
+
+import { useLaunchParams } from '@telegram-apps/sdk-react';
+import { List } from '@telegram-apps/telegram-ui';
+import type { FC } from 'react';
+
+import { DisplayData } from '@/components/DisplayData/DisplayData.tsx';
+
+export const LaunchParamsPage: FC = () => {
+  const lp = useLaunchParams();
+
+  return (
+    <List>
+      <DisplayData
+        rows={[
+          { title: 'tgWebAppPlatform', value: lp.platform },
+          { title: 'tgWebAppShowSettings', value: lp.showSettings },
+          { title: 'tgWebAppVersion', value: lp.version },
+          { title: 'tgWebAppBotInline', value: lp.botInline },
+          { title: 'tgWebAppStartParam', value: lp.startParam },
+          { title: 'tgWebAppData', type: 'link', value: '/init-data' },
+          { title: 'tgWebAppThemeParams', type: 'link', value: '/theme-params' },
+        ]}
+      />
+    </List>
+  );
+};
+
+src/pages/ThemeParamsPage.tsx:
+
+import { useThemeParams } from '@telegram-apps/sdk-react';
+import type { FC } from 'react';
+import { List } from '@telegram-apps/telegram-ui';
+
+import { DisplayData } from '@/components/DisplayData/DisplayData.tsx';
+
+export const ThemeParamsPage: FC = () => {
+  const themeParams = useThemeParams();
+
+  return (
+    <List>
+      <DisplayData
+        rows={
+          Object
+            .entries(themeParams.getState())
+            .map(([title, value]) => ({
+              title: title
+                .replace(/[A-Z]/g, (m) => `_${m.toLowerCase()}`)
+                .replace(/background/, 'bg'),
+              value,
+            }))
+        }
+      />
+    </List>
+  );
+};
+
+src/pages/TONConnectPage.tsx:
+
+import { useUtils } from '@telegram-apps/sdk-react';
+import { TonConnectButton, useTonWallet } from '@tonconnect/ui-react';
+import {
+  Avatar,
+  Cell,
+  List,
+  Navigation,
+  Placeholder,
+  Section,
+  Text,
+  Title,
+} from '@telegram-apps/telegram-ui';
+import type { FC } from 'react';
+
+import { DisplayData } from '@/components/DisplayData/DisplayData.tsx';
+
+import './TONConnectPage.css';
+
+export const TONConnectPage: FC = () => {
+  const wallet = useTonWallet();
+  const utils = useUtils();
+
+  if (!wallet) {
+    return (
+      <Placeholder
+        className='ton-connect-page__placeholder'
+        header='TON Connect'
+        description={
+          <>
+            <Text>
+              To display the data related to the TON Connect, it is required to connect your wallet
+            </Text>
+            <TonConnectButton className='ton-connect-page__button'/>
+          </>
+        }
+      />
+    );
+  }
+
+  const {
+    account: { chain, publicKey, address },
+    device: {
+      appName,
+      appVersion,
+      maxProtocolVersion,
+      platform,
+      features,
+    },
+  } = wallet;
+
+  return (
+    <List>
+      {'imageUrl' in wallet && (
+        <>
+          <Section>
+            <Cell
+              before={
+                <Avatar src={wallet.imageUrl} alt='Provider logo' width={60} height={60}/>
+              }
+              after={<Navigation>About wallet</Navigation>}
+              subtitle={wallet.appName}
+              onClick={(e) => {
+                e.preventDefault();
+                utils.openLink(wallet.aboutUrl);
+              }}
+            >
+              <Title level='3'>{wallet.name}</Title>
+            </Cell>
+          </Section>
+          <TonConnectButton className='ton-connect-page__button-connected'/>
+        </>
+      )}
+      <DisplayData
+        header='Account'
+        rows={[
+          { title: 'Address', value: address },
+          { title: 'Chain', value: chain },
+          { title: 'Public Key', value: publicKey },
+        ]}
+      />
+      <DisplayData
+        header='Device'
+        rows={[
+          { title: 'App Name', value: appName },
+          { title: 'App Version', value: appVersion },
+          { title: 'Max Protocol Version', value: maxProtocolVersion },
+          { title: 'Platform', value: platform },
+          {
+            title: 'Features',
+            value: features
+              .map(f => typeof f === 'object' ? f.name : undefined)
+              .filter(v => v)
+              .join(', '),
+          },
+        ]}
+      />
+    </List>
+  );
+};
+
+index.tsx:
+
+import ReactDOM from 'react-dom/client';
+
+import { Root } from '@/components/Root';
+
+// Uncomment this import in case, you would like to develop the application even outside
+// the Telegram application, just in your browser.
+import './mockEnv.ts';
+
+import '@telegram-apps/telegram-ui/dist/styles.css';
+import './index.css';
+
+ReactDOM.createRoot(document.getElementById('root')!).render(<Root/>);
+
+Telegram SDK ( some documentations for needed):
+
+Components
+Init
+According to the design of this package, the developer has complete control over its lifecycle, including the initialization process. This means that there are no pre-initialized global components available for use by the developer. They must create the components themselves.
+
+To simplify the developer's workflow, the package includes special functions prefixed with the init string. These functions return a tuple, containing an instance of the initialized component and a cleanup function, removing all side effects created by this init function.
+
+Here is an example:
+
+typescript
+import { initBackButton, initMainButton } from '@telegram-apps/sdk';
+
+const [mb, cleanupMb] = initMainButton();
+const [bb, cleanupBb] = initBackButton();
+
+// Clicking the MainButton hides it and shows the BackButton.
+mb.on('click', () => {
+  mainButton.hide();
+  backButton.show();
+});
+
+// Clicking the BackButton hides it and shows the MainButton.
+bb.on('click', () => {
+  mainButton.show();
+  backButton.hide();
+});
+
+// Configure the MainButton.
+mb
+  .setBgColor('#ff0000')
+  .setTextColor('#ffffff')
+  .setText('Expand')
+  .enable()
+  .show();
+
+// When we don't need BackButton and MainButton anymore, we can 
+// perform a cleanup. After calling a cleanup, the initialized 
+// component will not receive any events.
+cleanupMb();
+cleanupBb();
+INFO
+
+Take note that some components cannot be instantiated synchronously as long as there is no information about them locally. Use each component's documentation to learn more about how the component initializes.
+
+Events
+Component instances use the common way of events listening through the on and off methods. Here is the example with the BackButton component:
+
+typescript
+import { initBackButton } from '@telegram-apps/sdk';
+
+const [bb] = initBackButton();
+
+// Clicking the BackButton hides it and shows the MainButton.
+bb.on('click', () => {
+  console.log('BackButton clicked.');
+});
+You can find the list of supported events in components own documentations.
+
+Methods Support
+Almost each component is capable of checking whether its method is supported by the current Mini Apps version or not. To check if some methods are supported, developer should use the component instance supports() function. For example:
+
+typescript
+import { BackButton } from '@telegram-apps/sdk';
+
+let bb = new BackButton('6.0', ...);
+bb.supports('show'); // false
+
+bb = new BackButton('6.3', ...);
+bb.supports('hide'); // true
+Some of the components support an additional method supportsParam which allows checking if method parameter is supported:
+
+typescript
+import { Utils } from '@telegram-apps/sdk';
+
+let utils = new Utils('6.0', ...);
+utils.supportsParam('openLink.tryInstantView'); // false
+
+utils = new Utils('6.10', ...);
+utils.supportsParam('openLink.tryInstantView'); // true
+
+
+# BackButton
+Implements Telegram Mini Apps Back Button.
+
+Initialization
+To initialize the component, use the initBackButton function:
+
+typescript
+import { initBackButton } from '@telegram-apps/sdk';
+
+const [backButton] = initBackButton();
+Showing and Hiding
+To show and hide BackButton, it is required to use show() and hide() methods. These methods update the button's isVisible property:
+
+typescript
+backButton.show();
+console.log(backButton.isVisible); // true  
+
+backButton.hide();
+console.log(backButton.isVisible); // false
+Events
+List of events, which could be tracked:
+
+Event	Listener	Triggered when
+click	() => void	Back Button was clicked
+change	() => void	Something in component changed
+change:isVisible	(value: boolean) => void	isVisible property changed
+Methods Support
+List of methods, which could be used in support checks: show and hide
+
+
+#BiometryManager
+Initialization
+To initialize the component, use the initBiometryManager function:
+
+typescript
+import { initBiometryManager } from '@telegram-apps/sdk';
+
+const [biometryManager] = initBiometryManager();
+INFO
+
+Since BiometryManager can't be instantiated synchronously, this function returns a promise that will be resolved when the biometry manager data is retrieved.
+
+Authenticating
+To authenticate a user, use the authenticate method:
+
+ts
+bm
+  .authenticate({ reason: 'Authorize to unlock the storage' })
+  .then(token => {
+    console.log('Token received', token);
+  });
+This method accepts an optional reason: string property with length up to 128 symbols.
+
+Opening Settings
+To open a modal window with biometry settings, use the openSettings method:
+
+ts
+bm.openSettings();
+In this modal, a user is capable of turning on and off the biometry functionality.
+
+Requesting Access
+To request a permission to use the biometry, use the requestAccess method:
+
+ts
+bm
+  .requestAccess({ reason: 'Authorize to start using biometry' })
+  .then(accessGranted => {
+    console.log('Access granted', accessGranted);
+  });
+As well as the authenticate method, it accepts an optional reason: string property with length up to 128 symbols.
+
+Updating Biometry Token
+To update a token, stored in the secure storage, use the updateToken method:
+
+ts
+bm
+  .updateToken({ token: 'My token' })
+  .then(status => {
+    console.log('Token updated', status);
+  });
+This method returns a promise with the execution status.
+
+Events
+List of events, which could be tracked:
+
+Event	Listener	Triggered when
+change:accessGranted	(value: boolean) => void	accessGranted property changed
+change:accessRequested	(value: boolean) => void	accessRequested property changed
+change:available	(value: boolean) => void	available property changed
+change:deviceId	(value: string) => void	deviceId property changed
+change:tokenSaved	(value: boolean) => void	tokenSaved property changed
+change:token	(value: string) => void	token property changed
+change:biometryType	(value: BiometryType) => void	biometryType property changed
+Methods Support
+List of methods, which could be used in support checks: auth, openSettings, requestAccess and updateToken.
+
+
+#ClosingBehavior
+Implements Telegram Mini Apps closing behavior functionality.
+
+Initialization
+To initialize the component, use the initClosingBehavior function:
+
+typescript
+import { initClosingBehavior } from '@telegram-apps/sdk';
+
+const [closingBehavior] = initClosingBehavior();
+Closing Confirmation
+To enable and disable closing confirmation, it is required to use enableConfirmation() and disableConfirmation() methods. These methods update isConfirmationNeeded property:
+
+typescript
+closingBehavior.enableConfirmation();
+console.log(closingBehavior.isConfirmationNeeded); // true  
+
+closingBehavior.disableConfirmation();
+console.log(closingBehavior.isConfirmationNeeded); // false
+Events
+List of events, which could be tracked:
+
+Event	Listener	Triggered when
+change	() => void	Something in component changed
+change:isConfirmationNeeded	(value: boolean) => void	isConfirmationNeeded property changed
+
+
+#CloudStorage
+Implements functionality related to Telegram Mini Apps cloud storage.
+
+Initialization
+To initialize the component, use the initCloudStorage function:
+
+typescript
+import { initCloudStorage } from '@telegram-apps/sdk';
+
+const cloudStorage = initCloudStorage();
+Setting Items
+To save a value in the cloud storage, it is required to use the set method:
+
+typescript
+cloudStorage
+  .set('my-key', 'my-value')
+  .then(() => console.log('Item saved'));
+Getting Items
+To get values by keys, it is required to use get method, which acquires both single string value and array of string values:
+
+
+Single value
+
+Array of values
+typescript
+cloudStorage
+  .get('my-key')
+  .then((value) => {
+    console.log(value);
+    // Output: 'my-value'
+  });
+
+cloudStorage
+  .get('non-existent')
+  .then((value) => {
+    console.log(value);
+    // Output: ''
+  });
+This method returns empty strings for those keys, which don't exist in the cloud storage.
+
+Getting Keys
+To retrieve all registered keys in the cloud storage, it is required to use the getKeys method:
+
+typescript
+cloudStorage
+  .getKeys()
+  .then((keys) => {
+    // Will be ['my-key'].
+    console.log('Keys are', keys);
+  })
+Deleting Items
+To delete items in the cloud storage, it is required to use delete method. This method allows deleting both single and multiple items:
+
+
+Single item
+
+Multiple items
+typescript
+cloudStorage
+  .delete('my-key')
+  .then(() => console.log('Key was deleted'));
+Methods Support
+List of methods, which could be used in support checks: delete, get, getKeys and set
+
+#HapticFeedback
+Implements Telegram Mini Apps haptic feedback functionality.
+
+Initialization
+To initialize the component, use the initHapticFeedback function:
+
+typescript
+import { initHapticFeedback } from '@telegram-apps/sdk';
+
+const [hapticFeedback] = initHapticFeedback();
+Notifications
+HapticFeedback supports 3 types of haptic events - impactOccurred, notificationOccurred and selectionChanged.
+
+impactOccurred
+A method tells that an impact occurred. The Telegram app may play the appropriate haptics based on style value passed. Style of impact occurred haptic event:
+
+light, indicates a collision between small or lightweight UI objects
+medium, indicates a collision between medium-sized or medium-weight UI objects
+heavy, indicates a collision between large or heavyweight UI objects
+rigid, indicates a collision between hard or inflexible UI objects
+soft, indicates a collision between soft or flexible UI objects
+typescript
+haptic.impactOccurred('medium');
+notificationOccurred
+A method tells that a task or action has succeeded, failed, or produced a warning. The Telegram app may play the appropriate haptics based on type value passed. Type of notification occurred type event.
+
+error, indicates that a task or action has failed,
+success, indicates that a task or action has completed successfully,
+warning, indicates that a task or action produced a warning.
+typescript
+haptic.notificationOccurred('success');
+selectionChanged
+A method tells that the user has changed a selection.
+
+typescript
+haptic.selectionChanged();
+Methods Support
+List of methods, which could be used in support checks: notificationOccurred, impactOccurred and selectionChanged
+
+
+InitData
+The component which is responsible for implementing the Telegram Mini Apps init data.
+
+Initialization
+To initialize the component, use the initInitData function:
+
+typescript
+import { initInitData } from '@telegram-apps/sdk';
+
+const [initData] = initInitData();
+Properties
+authDate
+Type: Date
+
+Init data generation date.
+
+canSendAfter
+Type: number, optional
+
+The number of seconds after which a message can be sent via the method answerWebAppQuery.
+
+canSendAfterDate
+Type: Date, optional
+
+Date after which it is allowed to call the answerWebAppQuery method.
+
+chat
+Type: Chat, optional
+
+An object containing data about the chat where the bot was launched via the attachment menu. Returned for supergroups, channels and group chats – only for Mini Apps launched via the attachment menu.
+
+chatType
+Type: 'sender' | 'private' | 'group' | 'supergroup' | 'channel' | string, optional
+
+The type of chat from which Mini App was opened.
+
+chatInstance
+Type: string, optional
+
+A global identifier indicating the chat from which Mini App was opened. Returned only for applications opened by direct link.
+
+hash
+Type: string
+
+A hash of all passed parameters, which the bot server can use to check their validity.
+
+queryId
+Type: string, optional
+
+A unique identifier for the Mini App session, required for sending messages via the answerWebAppQuery method.
+
+receiver
+Type: User, optional
+
+An object containing data about the chat partner of the current user in the chat where the bot was launched via the attachment menu. Returned only for private chats and only for Mini Apps launched via the attachment menu.
+
+startParam
+Type: string, optional
+
+The value of the startattach parameter, passed via link. Only returned for Mini Apps when launched from the attachment menu via link.
+
+user
+Type: User, optional
+
+An object containing data about the current user.
+
+
+#Invoice
+Implements Telegram invoices functionality.
+
+Initialization
+To initialize the component, use the initInvoice function:
+
+typescript
+import { initInvoice } from '@telegram-apps/sdk';
+
+const invoice = initInvoice();
+Opening Invoice
+To open an invoice, it is required to use the open method. This method allows opening invoices using their URLs or slugs.
+
+Opening an invoice in URL mode requires passing the second argument equal to url, so the method will interpret the passed value as a URL.
+
+To interpret the passed value as a slug, omit the second argument.
+
+
+Using slug
+
+Using URL
+typescript
+invoice
+  .open('abIIks213')
+  .then((status) => {
+    // Output: 'paid'
+    return console.log(status);
+  });
+INFO
+
+Note that slug is a part of the string which is placed after the $ symbol. So, having the $abcdefghi value returned from Telegram Bot API, you must call the open method using the abcdefghi value, or a complete URL (https://t.me/invoice/abcdefghi or https://t.me/$abcdefghi).
+
+Events
+List of events, which could be tracked:
+
+Event	Listener	Triggered when
+change	() => void	Something in component changed
+change:isOpened	(value: boolean) => void	isOpened property changed
+Methods Support
+List of methods, which could be used in support checks: open
+
+
+#MainButton
+Implements Telegram Mini Apps Main Button.
+
+Initialization
+To initialize the component, use the initMainButton function:
+
+typescript
+import { initMainButton } from '@telegram-apps/sdk';
+
+const [mainButton] = initMainButton();
+Button Visibility
+To control the Main Button visibility, developer could use such methods as show() and hide(). Both of them update component's isVisible property:
+
+typescript
+mainButton.show();
+console.log(mainButton.isVisible); // true  
+
+mainButton.hide();
+console.log(mainButton.isVisible); // false
+Loader
+The Main Button could display a loader inside of it. To control its visibility, use showLoader() and hideLoader() methods. The isLoaderVisible property will be changed.
+
+typescript
+mainButton.showLoader();
+console.log(mainButton.isLoaderVisible); // true  
+
+mainButton.hideLoader();
+console.log(mainButton.isLoaderVisible); // false
+Active State
+The Main Button can be enabled and disabled by calling disable() and enable() methods. Both of the methods will update the isEnabled property.
+
+typescript
+mainButton.enable();
+console.log(mainButton.isEnabled); // true  
+
+mainButton.disable();
+console.log(mainButton.isEnabled); // false
+Enabling the Main Button will allow a user to click it. As the result, the Main Button will receive the click event.
+
+Background Color
+To update the Main Button background color, use the setBackgroundColor(color: RGB) method. It will update the backgroundColor property.
+
+typescript
+mainButton.setBackgroundColor('#ffffaa');
+console.log(mainButton.color); // '#ffffaa'
+Text Color
+To update the Main Button text color, use the setTextColor(color: RGB) method. It will update the textColor property.
+
+typescript
+mainButton.setTextColor('#cca233');
+console.log(mainButton.textColor); // '#cca233'
+Text
+To update the Main Button text, use the setText(text: string) method. It will update the text property.
+
+typescript
+mainButton.setText('Submit');
+console.log(mainButton.text); // 'Submit'
+Setting Multiple Properties
+Sometimes, a consecutive set of several Main Button parameters may lead to problematic artifacts in the UI. To avoid this issue, it is allowed to use the setParams method:
+
+typescript
+mainButton.setParams({
+  backgroundColor: '#aa1388',
+  text: 'Stop',
+  isVisible: true,
+});
+Events
+List of events, which could be tracked:
+
+Event	Listener	Triggered when
+click	() => void	Main Button was clicked
+change	() => void	Something in component changed
+change:backgroundColor	(value: RGB) => void	backgroundColor property changed
+change:isLoaderVisible	(value: boolean) => void	isLoaderVisible property changed
+change:isEnabled	(value: boolean) => void	isEnabled property changed
+change:isVisible	(value: boolean) => void	isVisible property changed
+change:text	(value: string) => void	text property changed
+change:textColor	(value: RGB) => void	textColor property changed
+
+
+#MiniApp
+The component which provides the common Telegram Mini Apps functionality not covered by other system components.
+
+Initialization
+To initialize the component, use the initMiniApp function:
+
+typescript
+import { initMiniApp } from '@telegram-apps/sdk';
+
+const [miniApp] = initMiniApp();
+Colors
+Header
+Developer is able to get and update Mini App header and background colors. To get current value of header color, developer could refer to the headerColor property and update it via setHeaderColor method:
+
+typescript
+miniApp.setHeaderColor('secondary_bg_color');
+// or starting from v6.10:
+miniApp.setHeaderColor('#aa1132');
+Background
+As well as Mini App header color, developer is also able to manipulate its background color:
+
+typescript
+miniApp.setBgColor('#888311');
+Mini App background color is used to determine if current Mini App has dark palette. To know if current palette is dark, developer should use isDark property:
+
+typescript
+console.log(miniApp.isDark); // false
+Access Requests
+Starting from Telegram Mini Apps version 6.9, Mini Apps are allowed to request access to the phone number and request access to write the current user. To do so, developers are allowed to use the requestPhoneAccess and requestWriteAccess methods:
+
+typescript
+miniApp.requestPhoneAccess().then(() => {
+  // done.
+});
+
+miniApp.requestWriteAccess().then(() => {
+  // done.
+});
+To request the contact information (the phone number, for example), utilize the requestContact method:
+
+typescript
+miniApp.requestContact().then(contact => {
+  console.log(contact);
+  // Output:
+  // {
+  //   authDate: Date(...),
+  //   hash: '...',
+  //   contact: {
+  //     firstName: '...',
+  //     phoneNumber: '+38291789233',
+  //   },
+  // };
+});
+Inline Mode
+Mini Apps are available to be launched in inline mode. When a Mini App is launched in such a mode, the developer is allowed to use the switchInlineQuery method:
+
+typescript
+miniApp.switchInlineQuery('Show me something', ['users', 'groups']);
+When calling this method, the Telegram application sends the bot username and the specified text to the chat selected by the user. The list of available chats will be restricted by the chat types specified in the second argument.
+
+To check if the current Mini App is launched in inline mode, the developer should refer to the isBotInline property:
+
+typescript
+console.log(miniApp.isBotInline); // false
+Lifecycle Methods
+ready
+Informs the Telegram app that the Mini App is ready to be displayed.
+
+It is recommended to call this method as early as possible, as soon as all essential interface elements loaded. Once this method called, the loading placeholder is hidden and the Mini App shown.
+
+If the method not called, the placeholder will be hidden only when the page fully loaded.
+
+typescript
+miniApp.ready();
+close
+Closes the Mini App.
+
+typescript
+miniApp.close();
+If you would like to wrap the application into the bottom app bar, but not to close it, consider using the first argument returnBack: boolean.
+
+ts
+// Will wrap the application into the bottom app bar.
+miniApp.close(true);
+Other Methods
+sendData
+A method used to send data to the bot. When this method is called, a service message is sent to the bot containing data of a length up to 4096 bytes, and the Mini App is closed. Refer to the web_app_data field in the Message class.
+
+Events
+List of events, which could be tracked:
+
+Event	Listener	Triggered when
+change	() => void	Something in component changed
+change:bgColor	(value: RGB) => void	bgColor property changed
+change:headerColor	(value: HeaderColorKey or RGB) => void	headerColor property changed
+Methods Support
+List of methods and parameters, which could be used in support checks: requestWriteAccess, requestPhoneAccess, switchInlineQuery, setHeaderColor, setBgColor and setHeaderColor.color.
+
+#SwipeBehavior
+Implements Telegram Mini Apps swipe behavior functionality.
+
+Initialization
+To initialize the component, use the initSwipeBehavior function:
+
+typescript
+import { initSwipeBehavior } from '@telegram-apps/sdk';
+
+const [swipeBehavior] = initSwipeBehavior();
+Vertical Swipe
+By default, users are allowed to hide the application just by swiping the application down. To prevent a possible closure, you can disable this behavior by calling the disableVerticalSwipe() method, or enable via the enableVerticalSwipe() method. In turn, both of these methods update the isVerticalSwipeEnabled property:
+
+typescript
+swipeBehavior.enableVerticalSwipe();
+console.log(swipeBehavior.isVerticalSwipeEnabled); // true  
+
+swipeBehavior.disableVerticalSwipe();
+console.log(swipeBehavior.isVerticalSwipeEnabled); // false
+Events
+List of events, which could be tracked:
+
+Event	Listener	Triggered when
+change	() => void	Something in component changed
+change:isVerticalSwipeEnabled	(value: boolean) => void	isVerticalSwipeEnabled property changed
+Methods Support
+List of methods, which could be used in support checks: disableVerticalSwipe, enableVerticalSwipe.
+
+
+#Utils
+Implements functionality that doesn't require state and can't be categorized.
+
+Initialization
+To initialize the component, use the initUtils function:
+
+typescript
+import { initUtils } from '@telegram-apps/sdk';
+
+const utils = initUtils();
+Links
+openLink
+MiniApp class is capable of opening links of different types. For example, it can open a link in an external browser not closing current Mini App, using method openLink:
+
+typescript
+utils.openLink('https://google.com');
+This method also allows opening a link using Telegram's Instant View when possible:
+
+typescript
+utils.openLink('https://google.com', { tryInstantView: true });
+To try opening a link using a user preferred browser, use the tryBrowser option:
+
+typescript
+utils.openLink('https://google.com', { tryBrowser: true });
+openTelegramLink
+In case, a developer would like to open a link related to Telegram (starting with https://t.me) the method openTelegramLink can be used.
+
+Using this method, the Telegram application will handle such a link on its own side:
+
+typescript
+utils.openTelegramLink('https://t.me/heyqbnk');
+shareURL
+Sharing a URL is a common functionality in mini applications. To achieve this, a developer can use the shareURL method, which accepts the URL to be shared and optional text to append to the message after the URL.
+
+When called, it opens the chat selector to share the URL.
+
+ts
+utils.shareURL('https://t.me/mybot/myapp', 'Look! Some cool app here!');
+WARNING
+
+Currently, there is no native method to share anything directly. Therefore, this method utilizes the openTelegramLink method, which closes the app after being called. This method uses Share links under the hood.
+
+Clipboard
+Developers are allowed to read the text from the clipboard using the readTextFromClipboard method.
+
+This method reads text from the clipboard and returns a string or null. Null is returned in cases:
+
+The value in the clipboard is not text.
+Access to the clipboard is not allowed.
+typescript
+utils.readTextFromClipboard().then((data) => {
+  console.log('Clipboard data:', data);
+  // Output: string or null
+});
+Methods Support
+List of methods and parameters, which could be used in support checks: readTextFromClipboard and openLink.tryInstantView
+
+#Viewport
+Implements Telegram Mini Apps viewport functionality.
+
+Initialization
+To initialize the component, use the initViewport function:
+
+typescript
+import { initViewport } from '@telegram-apps/sdk';
+
+const [viewport] = initViewport();
+INFO
+
+Since Viewport can't be instantiated synchronously, this function returns a promise as the first value in the tuple that will be resolved when the actual viewport state is retrieved.
+
+Dimensions
+The application can display just the top part of the Mini App, with its lower part remaining outside the screen area. From this position, the user can "pull" the Mini App to its maximum height, while the developer can do the same by calling expand method (use isExpanded prop to get current expansion state). As the position of the Mini App changes, the current height value of the visible area will be updated in real time.
+
+INFO
+
+Please note that the refresh rate of this value (height) is not sufficient to smoothly follow the lower border of the window. It should not be used to pin interface elements to the bottom of the visible area. It's more appropriate to use the value of the stableHeight field for this purpose.
+
+Requesting Actual Data
+To get actual viewport information, developer could use requestViewport function:
+
+typescript
+import {requestViewport} from '@telegram-apps/sdk';
+
+requestViewport().then((data) => {
+    // Output:
+    // { height: 122, isExpanded: false, width: 375, isStateStable: true }
+    console.log(data);
+});
+Events
+List of events, which could be tracked:
+
+Event	Listener	Triggered when
+change	() => void	Something in component changed
+change:height	(height: number) => void	height property changed
+change:isExpanded	(isExpanded: boolean) => void	isExpanded property changed
+change:stableHeight	(stableHeight: boolean) => void	stableHeight property changed
+change:width	(width: boolean) => void	width property changed
+

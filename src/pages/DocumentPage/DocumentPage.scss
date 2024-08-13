@@ -1,0 +1,21 @@
+.full-document-screen {
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    background: #17212b;
+    align-items: center;
+
+    .new-contract-section {
+        width: 100%;
+
+        .docs-buttons {
+            background: #17212b;
+            display: flex;
+            flex-direction: row;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 30px;
+        }
+    }
+}
