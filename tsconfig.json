@@ -27,7 +27,7 @@
   },
   "include": [
     "src"
-, "src/App.tsx"  ],
+, "src/components/App.tsx"  ],
   "references": [
     {
       "path": "./tsconfig.node.json"
