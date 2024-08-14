@@ -1,669 +1,159 @@
-components/DisplayData.tsx:
+Documentations:
 
-import { isRGB } from '@telegram-apps/sdk-react';
-import { Cell, Checkbox, Section } from '@telegram-apps/telegram-ui';
-import type { FC, ReactNode } from 'react';
+@telegram-apps/sdk-react
 
-import { RGB } from '@/components/RGB/RGB.tsx';
-import { Link } from '@/components/Link/Link.tsx';
+React JS bindings for client SDK. Includes hooks, components and utilities for comfortable usage of React JS on the Telegram Mini Apps platform.
 
-import './DisplayData.css';
+Installation
+Before anything else, it is assumed that you have already installed the react package, as it is a peer dependency of this package.
 
-export type DisplayDataRow =
-  & { title: string }
-  & (
-  | { type: 'link'; value?: string }
-  | { value: ReactNode }
-  )
+pnpm i @telegram-apps/sdk-react
 
-export interface DisplayDataProps {
-  header?: ReactNode;
-  footer?: ReactNode;
-  rows: DisplayDataRow[];
+SDKProvider
+
+SDKProvider is a component responsible for providing the SDK functionality. It accepts such properties as acceptCustomStyles: boolean and debug: boolean. Both of them are optional.
+
+The acceptCustomStyles property is responsible for accepting custom styles from the web version of Telegram.
+
+The debug property is responsible for enabling a debug mode.
+
+jsx
+import { SDKProvider } from '@telegram-apps/sdk-react';
+
+/**
+ * Root component for the whole project.
+ */
+export function Root() {
+  return (
+    <SDKProvider acceptCustomStyles debug>
+      <div>My application!</div>
+    </SDKProvider>
+  );
 }
 
-export const DisplayData: FC<DisplayDataProps> = ({ header, rows }) => (
-  <Section header={header}>
-    {rows.map((item, idx) => {
-      let valueNode: ReactNode;
+Hooks
+For better understanding, each component hook uses its own component-related init function. If the init function returns a non-promise value, the hook will instantly retrieve it. If the init function is asynchronous, the hook will return an undefined value while the component is still initializing. Then, it will be updated to the initialized value.
 
-      if (item.value === undefined) {
-        valueNode = <i>empty</i>;
-      } else {
-        if ('type' in item) {
-          valueNode = <Link to={item.value}>Open</Link>;
-        } else if (typeof item.value === 'string') {
-          valueNode = isRGB(item.value)
-            ? <RGB color={item.value}/>
-            : item.value;
-        } else if (typeof item.value === 'boolean') {
-          valueNode = <Checkbox checked={item.value} disabled/>;
-        } else {
-          valueNode = item.value;
-        }
-      }
+All component hooks in this package are divided into two parts:
 
-      return (
-        <Cell
-          className='display-data__line'
-          subhead={item.title}
-          readOnly
-          multiline={true}
-          key={idx}
-        >
-          <span className='display-data__line-value'>
-            {valueNode}
-          </span>
-        </Cell>
-      );
-    })}
-  </Section>
-);
+Retrieving the actual init function value. These hooks are non-suffixed, like useBackButton.
+Retrieving a meta item related to the init function value. These hooks include a suffix such as Raw, like useBackButtonRaw.
+The first category of hooks returns the actual init function value. They throw an error if something goes wrong during component initialization.
 
-components/Link.tsx:
+The second category of hooks returns an object containing the initialization process information. Here is the object shape:
 
-import { classNames, useUtils } from '@telegram-apps/sdk-react';
-import { type FC, type MouseEventHandler, useCallback } from 'react';
-import { Link as RouterLink, type LinkProps } from 'react-router-dom';
-
-import './Link.css';
-
-export const Link: FC<LinkProps> = ({
-  className,
-  onClick: propsOnClick,
-  to,
-  ...rest
-}) => {
-  const utils = useUtils();
-
-  const onClick = useCallback<MouseEventHandler<HTMLAnchorElement>>((e) => {
-    propsOnClick?.(e);
-
-    // Compute if target path is external. In this case we would like to open link using
-    // TMA method.
-    let path: string;
-    if (typeof to === 'string') {
-      path = to;
-    } else {
-      const { search = '', pathname = '', hash = '' } = to;
-      path = `${pathname}?${search}#${hash}`;
-    }
-
-    const targetUrl = new URL(path, window.location.toString());
-    const currentUrl = new URL(window.location.toString());
-    const isExternal = targetUrl.protocol !== currentUrl.protocol
-      || targetUrl.host !== currentUrl.host;
-
-    if (isExternal) {
-      e.preventDefault();
-      utils.openLink(targetUrl.toString());
-    }
-  }, [to, propsOnClick, utils]);
-
-  return (
-    <RouterLink
-      {...rest}
-      to={to}
-      onClick={onClick}
-      className={classNames(className, 'link')}
-    />
-  );
-};
-
-components/RGB.tsx:
-
-import { classNames, type RGB as RGBType } from '@telegram-apps/sdk-react';
-import type { FC } from 'react';
-
-import './RGB.css';
-
-export type RGBProps = JSX.IntrinsicElements['div'] & {
-  color: RGBType;
-};
-
-export const RGB: FC<RGBProps> = ({ color, className, ...rest }) => (
-  <span {...rest} className={classNames('rgb', className)}>
-    <i className='rgb__icon' style={{ backgroundColor: color }}/>
-    {color}
-  </span>
-);
-
-components/App.tsx:
-
-import { useIntegration } from '@telegram-apps/react-router-integration';
-import {
-  bindMiniAppCSSVars,
-  bindThemeParamsCSSVars,
-  bindViewportCSSVars,
-  initNavigator, useLaunchParams,
-  useMiniApp,
-  useThemeParams,
-  useViewport,
-} from '@telegram-apps/sdk-react';
-import { AppRoot } from '@telegram-apps/telegram-ui';
-import { type FC, useEffect, useMemo } from 'react';
-import {
-  Navigate,
-  Route,
-  Router,
-  Routes,
-} from 'react-router-dom';
-
-import { routes } from '@/navigation/routes.tsx';
-
-export const App: FC = () => {
-  const lp = useLaunchParams();
-  const miniApp = useMiniApp();
-  const themeParams = useThemeParams();
-  const viewport = useViewport();
-
-  useEffect(() => {
-    return bindMiniAppCSSVars(miniApp, themeParams);
-  }, [miniApp, themeParams]);
-
-  useEffect(() => {
-    return bindThemeParamsCSSVars(themeParams);
-  }, [themeParams]);
-
-  useEffect(() => {
-    return viewport && bindViewportCSSVars(viewport);
-  }, [viewport]);
-
-  // Create a new application navigator and attach it to the browser history, so it could modify
-  // it and listen to its changes.
-  const navigator = useMemo(() => initNavigator('app-navigation-state'), []);
-  const [location, reactNavigator] = useIntegration(navigator);
-
-  // Don't forget to attach the navigator to allow it to control the BackButton state as well
-  // as browser history.
-  useEffect(() => {
-    navigator.attach();
-    return () => navigator.detach();
-  }, [navigator]);
-
-  return (
-    <AppRoot
-      appearance={miniApp.isDark ? 'dark' : 'light'}
-      platform={['macos', 'ios'].includes(lp.platform) ? 'ios' : 'base'}
-    >
-      <Router location={location} navigator={reactNavigator}>
-        <Routes>
-          {routes.map((route) => <Route key={route.path} {...route} />)}
-          <Route path='*' element={<Navigate to='/'/>}/>
-        </Routes>
-      </Router>
-    </AppRoot>
-  );
-};
-
-components/ErrorBoundary.tsx:
-
-import {
-  Component,
-  type ComponentType,
-  type GetDerivedStateFromError,
-  type PropsWithChildren,
-  type ReactNode,
-} from 'react';
-
-export interface ErrorBoundaryProps extends PropsWithChildren {
-  fallback?: ReactNode | ComponentType<{ error: unknown }>;
-}
-
-interface ErrorBoundaryState {
+ts
+export interface SDKContextItem<T> {
+  /**
+   * This item execution result. The property may be missing
+   * in case the execution is async.
+   */
+  result?: T;
+  /**
+   * Function to clean up item side effects.
+   */
+  cleanup?(): void;
+  /**
+   * An error occurred during execution.
+   */
   error?: unknown;
 }
+Using the second category of hooks, you can extract an error without throwing it.
 
-export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
-  state: ErrorBoundaryState = {};
+Here is the complete usage example:
 
-  // eslint-disable-next-line max-len
-  static getDerivedStateFromError: GetDerivedStateFromError<ErrorBoundaryProps, ErrorBoundaryState> = (error) => ({ error });
-
-  componentDidCatch(error: Error) {
-    this.setState({ error });
-  }
-
-  render() {
-    const {
-      state: {
-        error,
-      },
-      props: {
-        fallback: Fallback,
-        children,
-      },
-    } = this;
-
-    return 'error' in this.state
-      ? typeof Fallback === 'function'
-        ? <Fallback error={error} />
-        : Fallback
-      : children;
-  }
-}
-
-components/Root.tsx:
-
-import { SDKProvider, useLaunchParams } from '@telegram-apps/sdk-react';
-import { TonConnectUIProvider } from '@tonconnect/ui-react';
-import { type FC, useEffect, useMemo } from 'react';
-
-import { App } from '@/components/App.tsx';
-import { ErrorBoundary } from '@/components/ErrorBoundary.tsx';
-
-const ErrorBoundaryError: FC<{ error: unknown }> = ({ error }) => (
-  <div>
-    <p>An unhandled error occurred:</p>
-    <blockquote>
-      <code>
-        {error instanceof Error
-          ? error.message
-          : typeof error === 'string'
-            ? error
-            : JSON.stringify(error)}
-      </code>
-    </blockquote>
-  </div>
-);
-
-const Inner: FC = () => {
-  const debug = useLaunchParams().startParam === 'debug';
-  const manifestUrl = useMemo(() => {
-    return new URL('tonconnect-manifest.json', window.location.href).toString();
-  }, []);
-
-  // Enable debug mode to see all the methods sent and events received.
-  useEffect(() => {
-    if (debug) {
-      import('eruda').then((lib) => lib.default.init());
-    }
-  }, [debug]);
-
-  return (
-    <TonConnectUIProvider manifestUrl={manifestUrl}>
-      <SDKProvider acceptCustomStyles debug={debug}>
-        <App/>
-      </SDKProvider>
-    </TonConnectUIProvider>
-  );
-};
-
-export const Root: FC = () => (
-  <ErrorBoundary fallback={ErrorBoundaryError}>
-    <Inner/>
-  </ErrorBoundary>
-);
-
-src/navigation/routes.tsx:
-
-import type { ComponentType, JSX } from 'react';
-
-import { IndexPage } from '@/pages/IndexPage/IndexPage';
-import { InitDataPage } from '@/pages/InitDataPage/InitDataPage';
-import { LaunchParamsPage } from '@/pages/LaunchParamsPage/LaunchParamsPage.tsx';
-import { ThemeParamsPage } from '@/pages/ThemeParamsPage/ThemeParamsPage.tsx';
-import { TONConnectPage } from '@/pages/TONConnectPage/TONConnectPage';
-
-interface Route {
-  path: string;
-  Component: ComponentType;
-  title?: string;
-  icon?: JSX.Element;
-}
-
-export const routes: Route[] = [
-  { path: '/', Component: IndexPage },
-  { path: '/init-data', Component: InitDataPage, title: 'Init Data' },
-  { path: '/theme-params', Component: ThemeParamsPage, title: 'Theme Params' },
-  { path: '/launch-params', Component: LaunchParamsPage, title: 'Launch Params' },
-  {
-    path: '/ton-connect',
-    Component: TONConnectPage,
-    title: 'TON Connect',
-    icon: (
-      <svg
-        xmlns="http://www.w3.org/2000/svg"
-        width="100%"
-        height="100%"
-        viewBox="0 0 56 56"
-        fill="none"
-      >
-        <path
-          d="M28 56C43.464 56 56 43.464 56 28C56 12.536 43.464 0 28 0C12.536 0 0 12.536 0 28C0 43.464 12.536 56 28 56Z"
-          fill="#0098EA"
-        />
-        <path
-          d="M37.5603 15.6277H18.4386C14.9228 15.6277 12.6944 19.4202 14.4632 22.4861L26.2644 42.9409C27.0345 44.2765 28.9644 44.2765 29.7345 42.9409L41.5381 22.4861C43.3045 19.4251 41.0761 15.6277 37.5627 15.6277H37.5603ZM26.2548 36.8068L23.6847 31.8327L17.4833 20.7414C17.0742 20.0315 17.5795 19.1218 18.4362 19.1218H26.2524V36.8092L26.2548 36.8068ZM38.5108 20.739L32.3118 31.8351L29.7417 36.8068V19.1194H37.5579C38.4146 19.1194 38.9199 20.0291 38.5108 20.739Z"
-          fill="white"
-        />
-      </svg>
-    ),
-  },
-];
-
-src/pages/IndexPage.tsx:
-
-import { Section, Cell, Image, List } from '@telegram-apps/telegram-ui';
-import type { FC } from 'react';
-
-import { Link } from '@/components/Link/Link.tsx';
-
-import tonSvg from './ton.svg';
-
-export const IndexPage: FC = () => {
-  return (
-    <List>
-      <Section
-        header='Features'
-        footer='You can use these pages to learn more about features, provided by Telegram Mini Apps and other useful projects'
-      >
-        <Link to='/ton-connect'>
-          <Cell
-            before={<Image src={tonSvg} style={{ backgroundColor: '#007AFF' }}/>}
-            subtitle='Connect your TON wallet'
-          >
-            TON Connect
-          </Cell>
-        </Link>
-      </Section>
-      <Section
-        header='Application Launch Data'
-        footer='These pages help developer to learn more about current launch information'
-      >
-        <Link to='/init-data'>
-          <Cell subtitle='User data, chat information, technical data'>Init Data</Cell>
-        </Link>
-        <Link to='/launch-params'>
-          <Cell subtitle='Platform identifier, Mini Apps version, etc.'>Launch Parameters</Cell>
-        </Link>
-        <Link to='/theme-params'>
-          <Cell subtitle='Telegram application palette information'>Theme Parameters</Cell>
-        </Link>
-      </Section>
-    </List>
-  );
-};
-
-src/pages/InitDataPage.tsx:
-
-import { type FC, useMemo } from 'react';
-import { useInitData, useLaunchParams, type User } from '@telegram-apps/sdk-react';
-import { List, Placeholder } from '@telegram-apps/telegram-ui';
-
-import { DisplayData, type DisplayDataRow } from '@/components/DisplayData/DisplayData.tsx';
-
-function getUserRows(user: User): DisplayDataRow[] {
-  return [
-    { title: 'id', value: user.id.toString() },
-    { title: 'username', value: user.username },
-    { title: 'photo_url', value: user.photoUrl },
-    { title: 'last_name', value: user.lastName },
-    { title: 'first_name', value: user.firstName },
-    { title: 'is_bot', value: user.isBot },
-    { title: 'is_premium', value: user.isPremium },
-    { title: 'language_code', value: user.languageCode },
-    { title: 'allows_to_write_to_pm', value: user.allowsWriteToPm },
-    { title: 'added_to_attachment_menu', value: user.addedToAttachmentMenu },
-  ];
-}
-
-export const InitDataPage: FC = () => {
-  const initDataRaw = useLaunchParams().initDataRaw;
-  const initData = useInitData();
-
-  const initDataRows = useMemo<DisplayDataRow[] | undefined>(() => {
-    if (!initData || !initDataRaw) {
-      return;
-    }
-    const {
-      hash,
-      queryId,
-      chatType,
-      chatInstance,
-      authDate,
-      startParam,
-      canSendAfter,
-      canSendAfterDate,
-    } = initData;
-    return [
-      { title: 'raw', value: initDataRaw },
-      { title: 'auth_date', value: authDate.toLocaleString() },
-      { title: 'auth_date (raw)', value: authDate.getTime() / 1000 },
-      { title: 'hash', value: hash },
-      { title: 'can_send_after', value: canSendAfterDate?.toISOString() },
-      { title: 'can_send_after (raw)', value: canSendAfter },
-      { title: 'query_id', value: queryId },
-      { title: 'start_param', value: startParam },
-      { title: 'chat_type', value: chatType },
-      { title: 'chat_instance', value: chatInstance },
-    ];
-  }, [initData, initDataRaw]);
-
-  const userRows = useMemo<DisplayDataRow[] | undefined>(() => {
-    return initData && initData.user ? getUserRows(initData.user) : undefined;
-  }, [initData]);
-
-  const receiverRows = useMemo<DisplayDataRow[] | undefined>(() => {
-    return initData && initData.receiver ? getUserRows(initData.receiver) : undefined;
-  }, [initData]);
-
-  const chatRows = useMemo<DisplayDataRow[] | undefined>(() => {
-    if (!initData?.chat) {
-      return;
-    }
-    const { id, title, type, username, photoUrl } = initData.chat;
-
-    return [
-      { title: 'id', value: id.toString() },
-      { title: 'title', value: title },
-      { title: 'type', value: type },
-      { title: 'username', value: username },
-      { title: 'photo_url', value: photoUrl },
-    ];
-  }, [initData]);
-
-  if (!initDataRows) {
-    return (
-      <Placeholder
-        header="Oops"
-        description="Application was launched with missing init data"
-      >
-        <img
-          alt="Telegram sticker"
-          src="https://xelene.me/telegram.gif"
-          style={{ display: 'block', width: '144px', height: '144px' }}
-        />
-      </Placeholder>
-    );
-  }
-  return (
-    <List>
-      <DisplayData header={'Init Data'} rows={initDataRows}/>
-      {userRows && <DisplayData header={'User'} rows={userRows}/>}
-      {receiverRows && <DisplayData header={'Receiver'} rows={receiverRows}/>}
-      {chatRows && <DisplayData header={'Chat'} rows={chatRows}/>}
-    </List>
-  );
-};
-
-src/pages/LaunchParamsPage.tsx:
-
-import { useLaunchParams } from '@telegram-apps/sdk-react';
-import { List } from '@telegram-apps/telegram-ui';
-import type { FC } from 'react';
-
-import { DisplayData } from '@/components/DisplayData/DisplayData.tsx';
-
-export const LaunchParamsPage: FC = () => {
-  const lp = useLaunchParams();
-
-  return (
-    <List>
-      <DisplayData
-        rows={[
-          { title: 'tgWebAppPlatform', value: lp.platform },
-          { title: 'tgWebAppShowSettings', value: lp.showSettings },
-          { title: 'tgWebAppVersion', value: lp.version },
-          { title: 'tgWebAppBotInline', value: lp.botInline },
-          { title: 'tgWebAppStartParam', value: lp.startParam },
-          { title: 'tgWebAppData', type: 'link', value: '/init-data' },
-          { title: 'tgWebAppThemeParams', type: 'link', value: '/theme-params' },
-        ]}
-      />
-    </List>
-  );
-};
-
-src/pages/ThemeParamsPage.tsx:
-
-import { useThemeParams } from '@telegram-apps/sdk-react';
-import type { FC } from 'react';
-import { List } from '@telegram-apps/telegram-ui';
-
-import { DisplayData } from '@/components/DisplayData/DisplayData.tsx';
-
-export const ThemeParamsPage: FC = () => {
-  const themeParams = useThemeParams();
-
-  return (
-    <List>
-      <DisplayData
-        rows={
-          Object
-            .entries(themeParams.getState())
-            .map(([title, value]) => ({
-              title: title
-                .replace(/[A-Z]/g, (m) => `_${m.toLowerCase()}`)
-                .replace(/background/, 'bg'),
-              value,
-            }))
-        }
-      />
-    </List>
-  );
-};
-
-src/pages/TONConnectPage.tsx:
-
-import { useUtils } from '@telegram-apps/sdk-react';
-import { TonConnectButton, useTonWallet } from '@tonconnect/ui-react';
+ts
 import {
-  Avatar,
-  Cell,
-  List,
-  Navigation,
-  Placeholder,
-  Section,
-  Text,
-  Title,
-} from '@telegram-apps/telegram-ui';
-import type { FC } from 'react';
+  useBackButton,
+  useBackButtonRaw,
+  useViewport,
+  useViewportRaw,
+  useBiometryManagerRaw,
+} from '@telegram-apps/sdk-react';
+import { useEffect } from 'react';
 
-import { DisplayData } from '@/components/DisplayData/DisplayData.tsx';
+// BackButton initializes synchronously. So, bb will be 
+// the BackButton instance.
+const bb = useBackButton();
 
-import './TONConnectPage.css';
+// Viewport is being initialized asynchronously, so signal may return undefined.
+// After some time it will receive a valid value.
+const vp = useViewport();
 
-export const TONConnectPage: FC = () => {
-  const wallet = useTonWallet();
-  const utils = useUtils();
+useEffect(() => {
+  console.log(vp); // will be undefined and then Viewport instance.
+}, [vp]);
 
-  if (!wallet) {
-    return (
-      <Placeholder
-        className='ton-connect-page__placeholder'
-        header='TON Connect'
-        description={
-          <>
-            <Text>
-              To display the data related to the TON Connect, it is required to connect your wallet
-            </Text>
-            <TonConnectButton className='ton-connect-page__button'/>
-          </>
-        }
-      />
-    );
+const bm = useBiometryManagerRaw();
+
+useEffect(() => {
+  if (bm.error) {
+    console.error('Something went wrong for BiometryManager', bm.error);
   }
+}, [bm]);
+SSR
+This package also supports SSR mode, widely used in popular frameworks like Next.js. When using package hooks on the server side, you must pass true as the first argument. This notifies the hook that server-side mode is enabled. Not specifying this value and calling the hook on the server side will lead to an error.
 
-  const {
-    account: { chain, publicKey, address },
-    device: {
-      appName,
-      appVersion,
-      maxProtocolVersion,
-      platform,
-      features,
-    },
-  } = wallet;
+Server-side mode returns undefined for each component hook on the server side and also before the current component is mounted. This is required for persistence between trees rendered on the server and client sides.
 
-  return (
-    <List>
-      {'imageUrl' in wallet && (
-        <>
-          <Section>
-            <Cell
-              before={
-                <Avatar src={wallet.imageUrl} alt='Provider logo' width={60} height={60}/>
-              }
-              after={<Navigation>About wallet</Navigation>}
-              subtitle={wallet.appName}
-              onClick={(e) => {
-                e.preventDefault();
-                utils.openLink(wallet.aboutUrl);
-              }}
-            >
-              <Title level='3'>{wallet.name}</Title>
-            </Cell>
-          </Section>
-          <TonConnectButton className='ton-connect-page__button-connected'/>
-        </>
-      )}
-      <DisplayData
-        header='Account'
-        rows={[
-          { title: 'Address', value: address },
-          { title: 'Chain', value: chain },
-          { title: 'Public Key', value: publicKey },
-        ]}
-      />
-      <DisplayData
-        header='Device'
-        rows={[
-          { title: 'App Name', value: appName },
-          { title: 'App Version', value: appVersion },
-          { title: 'Max Protocol Version', value: maxProtocolVersion },
-          { title: 'Platform', value: platform },
-          {
-            title: 'Features',
-            value: features
-              .map(f => typeof f === 'object' ? f.name : undefined)
-              .filter(v => v)
-              .join(', '),
-          },
-        ]}
-      />
-    </List>
-  );
-};
+ts
+import { useBackButton } from '@telegram-apps/sdk-react';
+import { useEffect } from 'react';
 
-index.tsx:
+function Component() {
+  const bb = useBackButton(true); // will be undefined or BackButton.
 
-import ReactDOM from 'react-dom/client';
+  useEffect(() => {
+    if (bb) {
+      // Here we can safely work with the BackButton.
+    }
+  }, [bb]);
+}
+HOCs
+All package Higher Order Components utilize the hooks described previously. The usage is rather simple:
 
-import { Root } from '@/components/Root';
+ts
+import { withBackButton } from '@telegram-apps/sdk-react';
+import { useEffect } from 'react';
 
-// Uncomment this import in case, you would like to develop the application even outside
-// the Telegram application, just in your browser.
-import './mockEnv.ts';
+const A = withBackButton('bb', false, ({ bb }) => {
+  useEffect(() => {
+    bb.show();
+  }, [bb]);
+  return null;
+});
 
-import '@telegram-apps/telegram-ui/dist/styles.css';
-import './index.css';
+const B = withBackButton('bb', true, ({ bb }) => {
+   useEffect(() => {
+      bb && bb.show();
+   }, [bb]);
+   return null;
+});
+As the first argument, you must pass a value responsible for the component property name receiving a hook result. The second argument is SSR flag mode, which will be passed to the hook, used internally.
 
-ReactDOM.createRoot(document.getElementById('root')!).render(<Root/>);
+Hooks and HOCs List
+Hook and HOC (Raw)	Hook and HOC (Result)	Returned value
+useBackButtonRaw, withBackButtonRaw	useBackButton, withBackButton	BackButton
+useBiometryManagerRaw, withBiometryManagerRaw	useBiometryManager, withBiometryManager	BiometryManager or undefined
+useClosingBehaviorRaw, withClosingBehaviorRaw	useClosingBehavior, withClosingBehavior	ClosingBehavior
+useCloudStorageRaw, withCloudStorageRaw	useCloudStorage, withCloudStorage	CloudStorage
+useHapticFeedbackRaw, withHapticFeedbackRaw	useHapticFeedback, withHapticFeedback	HapticFeedback
+useInitDataRaw, withInitDataRaw	useInitData, withInitData	InitData
+useInvoiceRaw, withInvoiceRaw	useInvoice, withInvoice	Invoice
+useLaunchParams	Launch params
+useMainButtonRaw, withMainButtonRaw	useMainButton, withMainButton	MainButton
+useMiniAppRaw, withMiniAppRaw	useMiniApp, withMiniApp	MiniApp
+usePopupRaw, withPopupRaw	usePopup, withPopup	Popup
+useQRScannerRaw, withQRScannerRaw	useQRScanner, withQRScanner	QRScanner
+useSettingsButtonRaw, withSettingsButtonRaw	useSettingsButton, withSettingsButton	SettingsButton
+useSwipeBehaviorRaw, withSwipeBehaviorRaw	useSwipeBehavior, withSwipeBehavior	SwipeBehavior
+useThemeParamsRaw, withThemeParamsRaw	useThemeParams, withThemeParams	ThemeParams
+useUtilsRaw, withUtilsRaw	useUtils, withUtils	Utils
+useViewportRaw, withViewportRaw	useViewport, withViewport	Viewport or undefined
+Template
+We have already created a template for React JS that utilizes the current package, so you can use it.
 
-Telegram SDK ( some documentations for needed):
-
-Components
+#Components
 Init
 According to the design of this package, the developer has complete control over its lifecycle, including the initialization process. This means that there are no pre-initialized global components available for use by the developer. They must create the components themselves.
 
@@ -741,9 +231,11 @@ utils.supportsParam('openLink.tryInstantView'); // false
 
 utils = new Utils('6.10', ...);
 utils.supportsParam('openLink.tryInstantView'); // true
+TIP
 
+It is recommended to use this functionality before calling some component method as long as this will make developer sure, it will work. The list of supported methods by components is described in each component documentation.
 
-# BackButton
+#BackButton
 Implements Telegram Mini Apps Back Button.
 
 Initialization
@@ -774,6 +266,7 @@ List of methods, which could be used in support checks: show and hide
 
 
 #BiometryManager
+
 Initialization
 To initialize the component, use the initBiometryManager function:
 
@@ -839,7 +332,6 @@ change:biometryType	(value: BiometryType) => void	biometryType property changed
 Methods Support
 List of methods, which could be used in support checks: auth, openSettings, requestAccess and updateToken.
 
-
 #ClosingBehavior
 Implements Telegram Mini Apps closing behavior functionality.
 
@@ -865,7 +357,6 @@ List of events, which could be tracked:
 Event	Listener	Triggered when
 change	() => void	Something in component changed
 change:isConfirmationNeeded	(value: boolean) => void	isConfirmationNeeded property changed
-
 
 #CloudStorage
 Implements functionality related to Telegram Mini Apps cloud storage.
@@ -931,6 +422,7 @@ cloudStorage
 Methods Support
 List of methods, which could be used in support checks: delete, get, getKeys and set
 
+
 #HapticFeedback
 Implements Telegram Mini Apps haptic feedback functionality.
 
@@ -970,8 +462,7 @@ haptic.selectionChanged();
 Methods Support
 List of methods, which could be used in support checks: notificationOccurred, impactOccurred and selectionChanged
 
-
-InitData
+#InitData
 The component which is responsible for implementing the Telegram Mini Apps init data.
 
 Initialization
@@ -1037,7 +528,6 @@ Type: User, optional
 
 An object containing data about the current user.
 
-
 #Invoice
 Implements Telegram invoices functionality.
 
@@ -1078,7 +568,6 @@ change	() => void	Something in component changed
 change:isOpened	(value: boolean) => void	isOpened property changed
 Methods Support
 List of methods, which could be used in support checks: open
-
 
 #MainButton
 Implements Telegram Mini Apps Main Button.
@@ -1158,7 +647,6 @@ change:isEnabled	(value: boolean) => void	isEnabled property changed
 change:isVisible	(value: boolean) => void	isVisible property changed
 change:text	(value: string) => void	text property changed
 change:textColor	(value: RGB) => void	textColor property changed
-
 
 #MiniApp
 The component which provides the common Telegram Mini Apps functionality not covered by other system components.
@@ -1286,6 +774,68 @@ change:isVerticalSwipeEnabled	(value: boolean) => void	isVerticalSwipeEnabled pr
 Methods Support
 List of methods, which could be used in support checks: disableVerticalSwipe, enableVerticalSwipe.
 
+#ThemeParams
+The component which contains an information about currently used theme by the Telegram application.
+
+Initialization
+To initialize the component, use the initThemeParams function:
+
+typescript
+import { initThemeParams } from '@telegram-apps/sdk';
+
+const [themeParams] = initThemeParams();
+Requesting Actual Data
+To get the actual theme parameters information, developer could use the requestThemeParams function:
+
+typescript
+import { requestThemeParams } from '@telegram-apps/sdk';
+
+requestThemeParams.then(console.log);
+
+// Output:
+// { bgColor: '#ffaabb', ... }
+Colors
+The developer can retrieve the theme color by using the get method:
+
+typescript
+themeParams.get('bgColor');
+themeParams.get('packageUnknownColor');
+To retrieve all colors via one object, use getState method:
+
+typescript
+themeParams.getState();
+// Output:
+// {
+//   accentTextColor: '#aa1399',
+//   bgColor: '#baac12',
+//   linkColor: '#887722'
+//   packageUnknownColor: '#676767,
+// }
+The ThemeParams component provides direct access to the list of colors:
+
+accentTextColor: RGB | undefined
+bgColor: RGB | undefined
+buttonColor: RGB | undefined
+buttonTextColor: RGB | undefined
+destructiveTextColor: RGB | undefined
+headerBgColor: RGB | undefined
+hintColor: RGB | undefined
+linkColor: RGB | undefined
+secondaryBgColor: RGB | undefined
+sectionBgColor: RGB | undefined
+sectionHeaderTextColor: RGB | undefined
+subtitleTextColor: RGB | undefined
+textColor: RGB | undefined
+Example:
+
+typescript
+themeParams.accentTextColor; // '#aa1399'
+Events
+List of events, which could be tracked:
+
+Event	Listener	Triggered when
+change	() => void	Something in component changed
+change:{theme_key}	(value: RGB) => void	Color with specified key changed
 
 #Utils
 Implements functionality that doesn't require state and can't be categorized.
@@ -1386,3 +936,774 @@ change:isExpanded	(isExpanded: boolean) => void	isExpanded property changed
 change:stableHeight	(stableHeight: boolean) => void	stableHeight property changed
 change:width	(width: boolean) => void	width property changed
 
+#BrowserNavigator
+BrowserNavigator is a class that implements navigation using the browser's History API. This navigator extends the standard one, providing basic navigation functionality and logic specific to the browser's history.
+
+Constructor
+To create an instance of this class, developers can use the class constructor, which accepts history items, a cursor (index) pointing to the entry in the history items list, and additional options:
+
+typescript
+import { BrowserNavigator } from '@telegram-apps/sdk';
+
+new BrowserNavigator(['/index'], 0);
+new BrowserNavigator([{ pathname: '/a' }, { pathname: '/b' }], 1);
+WARNING
+
+If an empty history items list or a cursor pointing to a non-existent item is passed, the constructor will throw an appropriate error.
+
+postEvent
+The postEvent function allows replacing a function that calls Mini Apps methods on behalf of the navigator.
+
+ts
+const n = new BrowserNavigator(['/'], 0, {
+  postEvent(method, payload) {
+    console.log('postEvent:', method, payload);
+  },
+});
+hashMode
+The hashMode property allows a developer to set the navigation mode used by the navigator. Allowed values are classic (#pathname), slash (#/pathname), and null. Passing the null value switches the navigator from SPA mode to MPA mode, using the entire href instead of the hash part of the location.
+
+By default, the navigator uses the classic mode.
+
+ts
+const n = new BrowserNavigator(['/'], 0, {
+  hashMode: 'slash'
+});
+base
+The base property is responsible for parsing routes and rendering paths assuming that they must start with the specified base value.
+
+ts
+const n = new BrowserNavigator(['/'], 0, {
+  hashMode: null,
+  base: '/solidjs-template',
+});
+
+n.renderPath('/home'); // -> /solidjs-template/home
+This value is only useful when you are using the MPA mode.
+
+createBrowserNavigatorFromLocation
+To simplify the process of creating BrowserNavigator, the package provides the createBrowserNavigatorFromLocation method. Depending on the options (which are constructor options described previously) passed, it parses the current location and creates a BrowserNavigator instance.
+
+typescript
+import { createBrowserNavigatorFromLocation } from '@telegram-apps/sdk';
+
+const navigator = createBrowserNavigatorFromLocation({
+  hashMode: 'slash',
+});
+initNavigator
+The initNavigator function is responsible for creating a BrowserNavigator instance using previously saved navigator state. It also automatically saves it in the session storage for future state restoration.
+
+This function accepts session storage key name, which will contain navigator's state and an optional object, representing navigator constructor options.
+
+ts
+import { initNavigator } from '@telegram-apps/sdk';
+
+const n = initNavigator('app-navigator-state', {
+  hashMode: 'slash',
+});
+In case, the function was unable to restore the navigator using the session storage, it will utilize the createBrowserNavigatorFromLocation function.
+
+Attaching
+Creating an instance of BrowserNavigator and using its methods doesn't automatically update the browser history. To achieve this, developers should attach it. Until then, the navigator will only update its internal state and notify all its subscribers about changes. Manual attachment is necessary to prevent situations where several navigators of this type are created, each trying to control the browser history with its internal state.
+
+To allow the navigator to control the browser's history, it is required to attach it via the attach method:
+
+typescript
+import { BrowserNavigator } from '@telegram-apps/sdk';
+
+const navigator = new BrowserNavigator(...);
+
+navigator.attach().then(() => {
+  console.log('Attachment completed');
+});
+This method returns a promise that will be resolved when the attachment is completed.
+
+To stop the navigator from modifying the browser's history, use the detach method:
+
+typescript
+navigator.detach();
+Navigating
+The navigator provides a list of methods for developers to manipulate the navigation history.
+
+back
+Goes back in history by 1.
+
+typescript
+navigator.back();
+forward
+Goes forward in history by 1.
+
+typescript
+navigator.forward();
+go
+Changes the currently active history item index by the specified delta. This method doesn't change the index if the updated index points to a non-existing history item. This behavior is preserved until the fit argument is specified. If it is specified, the method adjusts the passed delta to fit within the bounds [0, history.length - 1].
+
+typescript
+// Goes back in history by 3 entries.
+navigator.go(-3);
+
+// Will surely do nothing in real-world applications.
+navigator.go(-100000);
+
+// Will go back to the oldest entry.
+navigator.go(-100000, true);
+
+// Will go forward to the newest entry.
+navigator.go(100000, true);
+goTo
+Goes to the specified index. The method does nothing if the passed index is out of bounds.
+
+If the fit option is specified and the index is out of bounds, it will be adjusted to the nearest bound.
+
+typescript
+// Will do nothing.
+navigator.goTo(-1);
+
+// Will go to the oldest entry.
+navigator.goTo(0);
+
+// Will surely do nothing in real-world applications.
+navigator.goTo(100000);
+
+// Will go back to the oldest entry.
+navigator.goTo(-100000, true);
+
+// Will go forward to the newest entry.
+navigator.goTo(100000, true);
+push
+Pushes a new history item. The method replaces all entries after the current one with the one being pushed. Note that the passed item is always relative. If you want to use it as an absolute one, use the / prefix. Example: /absolute, { pathname: '/absolute' }.
+
+To create a final path, the navigator uses a method, used in the URL class constructor, resolving a path based on the current one.
+
+In the upcoming examples, let's assume that the current entry is /home/blog.
+
+Absolute pathname
+Specifying an absolute path will not merge it with the current one; instead, it will be used in its entirety:
+
+typescript
+navigator.push('/database');
+// or
+navigator.push({ pathname: '/database' });
+// Navigator will add a new entry, and the current one becomes /database
+Relative pathname
+Specifying a relative pathname will exhibit the same behavior as in the browser:
+
+typescript
+navigator.push('license');
+// or
+navigator.push({ pathname: 'license' });
+// Navigator will add a new entry, and the current one becomes /home/license
+Search
+To add an entry with query parameters, use a question mark (?) or the search entry property:
+
+typescript
+navigator.push('?id=1');
+// or
+navigator.push({ search: '?id=1' });
+// Navigator will add a new entry, and the current one becomes /home/blog?id=1
+INFO
+
+Pushing a new pathname with different or missing query parameters will result in the loss of current query parameters. To prevent this, the developer should pass them again.
+
+Hash
+Adding the hash part of the entry follows the same logic as search, but using a hashtag (#) and the hash entry property.
+
+typescript
+navigator.push('#introduction');
+// or
+navigator.push({ hash: '#introduction' });
+// Navigator will add a new entry, and the current 
+// one becomes /home/blog#introduction
+replace
+The replace method functions similarly to the push method, but it doesn't create a new entry. Instead, it replaces the current one.
+
+Properties
+index
+Current history cursor.
+
+typescript
+const navigator = new BrowserNavigator(['/'], 0);
+navigator.index; // 0
+id
+Current history item identifier. The navigator generates them itself if an id is not specified explicitly.
+
+typescript
+const navigator = new BrowserNavigator(['/'], 0);
+navigator.id; // 'abb721'
+
+const navigator2 = new BrowserNavigator([{ id: 'a', pathname: '/' }], 0);
+navigator2.id; // 'a'
+hash
+Current history item hash.
+
+typescript
+const navigator = new BrowserNavigator(['/#jungle'], 0);
+navigator.hash; // "#jungle"
+hasPrev
+True if the navigator has items before the current item.
+
+typescript
+const navigator = new BrowserNavigator(['/'], 0);
+navigator.hasPrev; // false
+
+const navigator2 = new BrowserNavigator(['/a', '/b'], 1);
+navigator2.hasPrev; // true
+hasNext
+True if the navigator has items after the current item.
+
+typescript
+const navigator = new BrowserNavigator(['/'], 0);
+navigator.hasNext; // false
+
+const navigator2 = new BrowserNavigator(['/a', '/b'], 0);
+navigator2.hasNext; // true
+history
+Safe to modify navigation history.
+
+typescript
+const navigator = new BrowserNavigator(['/a#a-hash', '/b?b-query=1'], 0);
+navigator.history;
+// [
+//   { pathname: '/a', hash: '#a-hash', search: '', id: 'ahJJ123' },
+//   { pathname: '/b', hash: '', search: '?b-query=1', id: 'dd82' },
+// ]
+path
+Path, including pathname, search, and hash.
+
+typescript
+const navigator = new BrowserNavigator([{
+  pathname: '/a',
+  hash: '#mama',
+  search: '?joe',
+}], 0);
+navigator.path; // '/a?joe#mama'
+pathname
+Current pathname. Always starts with a slash.
+
+typescript
+const navigator = new BrowserNavigator([{
+  pathname: '/a',
+  hash: '#mama',
+  search: '?joe',
+}], 0);
+navigator.pathname; // '/a'
+search
+Current query parameters.
+
+typescript
+const navigator = new BrowserNavigator([{
+  pathname: '/a',
+  hash: '#mama',
+  search: '?joe',
+}], 0);
+navigator.search; // '?joe'
+state
+Current history item state.
+
+typescript
+const navigator = new BrowserNavigator([{ state: 'test' }], 0);
+
+
+navigator.state; // 'test'
+Events
+BrowserNavigator provides on and off methods to manage event listeners. Currently, the only event available for listening is change. The change event's payload is an object containing the following properties:
+
+navigator: BrowserNavigator: The related navigator instance.
+delta: number: The delta of the currently active item cursor.
+from: { pathname: string; hash: string; search: string; id: string; state?: State }: The previously active history item.
+to: An object with the same structure as from, representing the currently active history item.
+Adding an Event Listener
+To add an event listener for the change event, use the on method:
+
+typescript
+const removeEventListener = navigator.on('change', (ev) => {
+  console.warn('Navigation state changed', ev);
+});
+Removing an Event Listener
+To remove an event listener, call the function returned by the on method:
+
+typescript
+removeEventListener();
+Alternatively, you could use the navigator's off method:
+
+typescript
+function listener(ev) {
+  console.warn('Navigation state changed', ev);
+}
+navigator.on('change', listener);
+navigator.off('change', listener);
+Other Methods
+renderPath
+The renderPath method combines the navigator's base property with the given path data, applying the navigator's navigation mode. This method returns the fully rendered path as a string.
+
+typescript
+const n = new BrowserNavigator(['/'], 0, {
+  hashMode: 'slash',
+});
+n.renderPath('/test'); // '#/test'
+
+const n2 = new BrowserNavigator(['/'], 0, {
+  base: '/my-base',
+  hashMode: 'slash',
+});
+n2.renderPath('/test'); // '#/my-base/test'
+
+const n3 = new BrowserNavigator(['/'], 0, {
+  base: '/my-base',
+  hashMode: null,
+});
+n3.renderPath('/test'); // '/my-base/test'
+parsePath
+The parsePath method parses the provided path according to the current navigation type and returns it as an object. This method helps to understand how the navigator interprets the given path.
+
+typescript
+const n = new BrowserNavigator(['/'], 0);
+n.parsePath('/test');
+// { pathname: '/', search: '', hash: '' }
+
+n.parsePath('/test#abc');
+// { pathname: '/abc', search: '', hash: '' }
+
+n.parsePath('/test#abc?query#some-hash');
+// { pathname: '/abc', search: '?query', hash: '#some-hash' }
+
+const n2 = new BrowserNavigator(['/'], 0, { hashMode: null });
+n2.parsePath('/test');
+// { pathname: '/test', search: '', hash: '' }
+
+n2.parsePath('/test#abc');
+// { pathname: '/test', search: '', hash: '#abc' }
+
+n2.parsePath('/test?query#abc');
+// { pathname: '/test', search: '?query', hash: '#abc' }
+
+#@telegram-apps/react-router-integration
+
+
+
+Telegram Mini Apps Navigator integration for react-router-dom.
+
+Installation
+
+pnpm
+
+npm
+
+yarn
+bash
+pnpm i @telegram-apps/react-router-integration
+Usage
+At the moment, this package provides the only 1 function, which creates the integration for react-router-dom Router - useIntegration.
+
+Here is how it could be used:
+
+jsx
+import { useIntegration } from '@telegram-apps/react-router-integration';
+import { initNavigator } from '@telegram-apps/sdk-react';
+import { useEffect, useMemo } from 'react';
+import {
+  Navigate,
+  Route,
+  Router,
+  Routes,
+} from 'react-router-dom';
+
+import { IndexPage } from './IndexPage.js';
+
+function App() {
+  // Create a new application navigator and attach it to the browser history, so it could modify
+  // it and listen to its changes.
+  const navigator = useMemo(() => initNavigator('app-navigation-state'), []);
+  const [location, reactNavigator] = useIntegration(navigator);
+
+  // Don't forget to attach the navigator to allow it to control the BackButton state as well
+  // as browser history.
+  useEffect(() => {
+    navigator.attach();
+    return () => navigator.detach();
+  }, [navigator]);
+
+  return (
+    <Router location={location} navigator={reactNavigator}>
+      <Routes>
+        <Route path={'/'} component={IndexPage}/>
+        <Route path={'*'} element={<Navigate href={'/'}/>}/>
+      </Routes>
+    </Router>
+  );
+}
+You can learn more about how to use it real world applications using our React template.
+
+My app codes: 
+
+components/App.tsx:
+
+import React, { useEffect, useMemo } from 'react';
+import { Navigate, Route, Router, Routes } from 'react-router-dom';
+import { useIntegration } from '@telegram-apps/react-router-integration';
+import {
+  bindMiniAppCSSVars,
+  bindThemeParamsCSSVars,
+  bindViewportCSSVars,
+  initNavigator, useLaunchParams,
+  useMiniApp,
+  useThemeParams,
+  useViewport,
+} from '@telegram-apps/sdk-react';
+import { AppRoot, Spinner } from '@telegram-apps/telegram-ui';
+import { routes } from '@/navigation/routes.tsx';
+import * as TelegramUI from '@telegram-apps/telegram-ui';
+
+
+export const App: React.FC = () => {
+  const launchParams = useLaunchParams();
+  const miniApp = useMiniApp();
+  const themeParams = useThemeParams();
+  const viewport = useViewport();
+
+  // Bind CSS variables for theming and viewport
+  useEffect(() => {
+    bindMiniAppCSSVars(miniApp, themeParams);
+  }, [miniApp, themeParams]);
+
+  useEffect(() => {
+    bindThemeParamsCSSVars(themeParams);
+  }, [themeParams]);
+
+  useEffect(() => {
+    if (viewport) {
+      bindViewportCSSVars(viewport);
+    }
+  }, [viewport]);
+
+  // Initialize navigator
+  const navigator = useMemo(() => initNavigator('app-navigation-state'), []);
+  const [location, reactNavigator] = useIntegration(navigator);
+
+  // Attach navigator for controlling history and back button state
+  useEffect(() => {
+    navigator.attach();
+    return () => navigator.detach();
+  }, [navigator]);
+
+  // Loading state management (if required)
+  if (!launchParams || !miniApp || !themeParams) {
+    return (
+      <AppRoot>
+        <Spinner size='l' />
+      </AppRoot>
+    );
+  }
+
+  console.log(TelegramUI);
+
+
+  return (
+    <AppRoot
+      appearance={miniApp.isDark ? 'dark' : 'light'}
+      platform={['macos', 'ios'].includes(launchParams.platform) ? 'ios' : 'base'}
+    >
+      <Router location={location} navigator={reactNavigator}>
+        <Routes>
+          {routes.map((route) => (
+            <Route key={route.path} {...route} />
+          ))}
+          <Route path="*" element={<Navigate to="/" />} />
+        </Routes>
+      </Router>
+    </AppRoot>
+  );
+};
+
+export default App;
+
+index.tsx:
+
+import ReactDOM from 'react-dom/client';
+
+import { Root } from '@/components/Root';
+
+// Uncomment this import in case, you would like to develop the application even outside
+// the Telegram application, just in your browser.
+import './mockEnv.ts';
+
+import '@telegram-apps/telegram-ui/dist/styles.css';
+import './index.scss';
+
+ReactDOM.createRoot(document.getElementById('root')!).render(<Root/>);
+
+src/pages/StartPage.tsx:
+
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import MainLogo from '../../assets/logo.svg';
+import { AppRoot, Section, Image, Button, FixedLayout, Spinner } from '@telegram-apps/telegram-ui';
+import './StartPage.scss';
+
+const StartPage: React.FC = () => {
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+
+  const handleStart = () => {
+    setLoading(true);
+    setTimeout(() => {
+      setLoading(false);
+      navigate('/registration');
+    }, 1000);
+  };
+
+  return (
+    <AppRoot>
+      <FixedLayout vertical="top" className="full-screen">
+        <Section className="logo-container">
+          <Image src={MainLogo} alt="App Logo"/>
+        </Section>
+        <FixedLayout vertical="bottom" className="button-layout">
+          <Button className="start-button" onClick={handleStart} style={{ background: '#1375FA', height: '58px' }}>
+            {loading ? <Spinner size="m" className='spinner'/> : 'Начать'}
+          </Button>
+        </FixedLayout>
+      </FixedLayout>
+    </AppRoot>
+  );
+};
+
+export default StartPage;
+
+src/pages/RegistrationPage.tsx:
+
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import {
+  AppRoot,
+  FixedLayout,
+  Section,
+  Text,
+  Input,
+  Button,
+  Caption,
+  Headline,
+  Spinner
+} from '@telegram-apps/telegram-ui';
+import checkIcon from '../../assets/checked.svg';
+import errorIcon from '../../assets/wrong.svg';
+import './RegistrationPage.scss';
+
+const validateName = (name: string) => /^[A-ZА-ЯЁ][a-zа-яё]+\s[A-ZА-ЯЁ][a-zа-яё]+$/.test(name);
+const validatePhoneNumber = (number: string) => /^(\+7|7|8)?[\s-]?\(?\d{3}\)?[\s-]?\d{3}[\s-]?\d{2}[\s-]?\d{2}$/.test(number);
+const validateEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+const validateINN = (inn: string) => /^\d{12}$/.test(inn);
+
+const RegistrationPage: React.FC = () => {
+  const [formData, setFormData] = useState({
+    name: '',
+    phone: '',
+    email: '',
+    inn: '',
+  });
+
+  const [formErrors, setFormErrors] = useState({
+    name: false,
+    phone: false,
+    email: false,
+    inn: false,
+  });
+
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+
+  const handleChange = (field: string, value: string) => {
+    setFormData((prevData) => ({
+      ...prevData,
+      [field]: value,
+    }));
+
+    switch (field) {
+      case 'name':
+        setFormErrors((prevErrors) => ({
+          ...prevErrors,
+          name: !validateName(value),
+        }));
+        break;
+      case 'phone':
+        setFormErrors((prevErrors) => ({
+          ...prevErrors,
+          phone: !validatePhoneNumber(value),
+        }));
+        break;
+      case 'email':
+        setFormErrors((prevErrors) => ({
+          ...prevErrors,
+          email: !validateEmail(value),
+        }));
+        break;
+      case 'inn':
+        setFormErrors((prevErrors) => ({
+          ...prevErrors,
+          inn: !validateINN(value),
+        }));
+        break;
+      default:
+        break;
+    }
+  };
+
+  const handleSubmit = () => {
+    const errors = {
+      name: !validateName(formData.name),
+      phone: !validatePhoneNumber(formData.phone),
+      email: !validateEmail(formData.email),
+      inn: !validateINN(formData.inn),
+    };
+    setFormErrors(errors);
+
+    // Check if any errors exist
+    const hasErrors = Object.values(errors).some((error) => error);
+    if (!hasErrors) {
+      setLoading(true);
+      setTimeout(() => {
+        setLoading(false);
+        navigate('/documents');
+      }, 1000);
+    }
+  };
+
+  const getStatusIcon = (hasError: boolean) => {
+    return (
+      <motion.img
+        src={hasError ? errorIcon : checkIcon}
+        alt={hasError ? 'Error' : 'Checked'}
+        className="status-icon"
+        initial={{ opacity: 0, scale: 0.8 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.8 }}
+        transition={{ duration: 0.3, ease: 'easeInOut' }}
+      />
+    );
+  };
+
+  return (
+    <AppRoot>
+      <FixedLayout vertical="top" className="full-screen">
+        <Section className='register-layout'>
+          <Section className='register-content'>
+            <Headline weight="3" Component={'h1'}>Регистрация</Headline>
+          </Section>
+          <Section className="form-body">
+            <Section className="form-item">
+              <Text weight="3" Component="span" className="input-label">
+                Введите вашу Ф.И.О
+              </Text>
+              <Input
+                placeholder="Иванов Иван Иванович"
+                className={`form-input ${formErrors.name ? 'error' : ''}`}
+                value={formData.name}
+                onChange={(e) => handleChange('name', e.currentTarget.value)}
+                after={formData.name && getStatusIcon(formErrors.name)}
+              />
+            </Section>
+            <Section className="form-item">
+              <Text weight="3" Component="span" className="input-label">
+                Введите ваш номер телефона
+              </Text>
+              <Input
+                placeholder="+7 (000) 000 00 00"
+                className={`form-input ${formErrors.phone ? 'error' : ''}`}
+                value={formData.phone}
+                onChange={(e) => handleChange('phone', e.currentTarget.value)}
+                after={formData.phone && getStatusIcon(formErrors.phone)}
+              />
+            </Section>
+            <Section className="form-item">
+              <Text weight="3" Component="span" className="input-label">
+                Введите ваш e-mail
+              </Text>
+              <Input
+                placeholder="e-mail"
+                className={`form-input ${formErrors.email ? 'error' : ''}`}
+                value={formData.email}
+                onChange={(e) => handleChange('email', e.currentTarget.value)}
+                after={formData.email && getStatusIcon(formErrors.email)}
+              />
+            </Section>
+            <Section className="form-item">
+              <Text weight="3" Component="span" className="input-label">
+                Введите ИНН
+              </Text>
+              <Input
+                placeholder="ИНН"
+                className={`form-input ${formErrors.inn ? 'error' : ''}`}
+                value={formData.inn}
+                onChange={(e) => handleChange('inn', e.currentTarget.value)}
+                after={formData.inn && getStatusIcon(formErrors.inn)}
+              />
+              {formErrors.inn && (
+                <Caption level="1" Component="p" style={{ color: 'red' }}>
+                  Количество цифр должно быть ровно 12
+                </Caption>
+              )}
+            </Section>
+          </Section>
+        </Section>
+        <FixedLayout vertical="bottom" className="bottom-data">
+          <Section className="agree-data">
+            <Caption level="1" Component="p">
+              Нажимая на кнопку “Продолжить” я даю согласие на
+              <span style={{ color: '#3586FF', marginLeft: '5px' }}>
+                обработку персональных данных
+              </span>
+            </Caption>
+          </Section>
+          <Button
+            className="start-button"
+            style={{ background: '#1375FA', height: '58px' }}
+            onClick={handleSubmit}
+          >
+            {loading ? <Spinner size="m" /> : 'Начать'}
+          </Button>
+        </FixedLayout>
+      </FixedLayout>
+    </AppRoot>
+  );
+};
+
+export default RegistrationPage;
+
+src/pages/DocumentPage.tsx:
+
+import React from 'react';
+import MainLogo from '../../assets/logo.svg';
+import { AppRoot, Section, Image, FixedLayout, Text, InlineButtons } from '@telegram-apps/telegram-ui';
+import './DocumentPage.scss';
+import IconInbox from '../../assets/icon_inbox.svg';
+import IconOutBox from '../../assets/icon_outbox.svg';
+// import AddIcon from '../../assets/plus-square.svg';
+
+const DocumentPage: React.FC = () => {
+  return (
+    <AppRoot>
+      <FixedLayout vertical="top" className="full-document-screen">
+        <Section className="logo-container">
+          <Section>
+            <Image src={MainLogo} alt="App Logo" className="document-logo" />
+          </Section>
+        </Section>
+        <Section className="new-contract-section">
+          <InlineButtons mode="plain" className='docs-buttons'>
+            <InlineButtons.Item className='docs-button'>
+              <Image src={IconInbox} alt="Inbox Icon" />
+              <Text weight='3'>Входящие</Text>
+            </InlineButtons.Item>
+            <InlineButtons.Item className='docs-button'>
+              <Image src={IconOutBox} alt="Outbox Icon" />
+              <Text weight='3'>Исходящие</Text>
+            </InlineButtons.Item>
+          </InlineButtons>
+        </Section>
+      </FixedLayout>
+    </AppRoot>
+  );
+};
+
+export default DocumentPage;

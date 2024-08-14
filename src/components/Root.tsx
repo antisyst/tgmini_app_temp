@@ -2,7 +2,7 @@ import { SDKProvider, useLaunchParams } from '@telegram-apps/sdk-react';
 import { TonConnectUIProvider } from '@tonconnect/ui-react';
 import { type FC, useEffect, useMemo } from 'react';
 
-import { App } from '@/components/App.tsx';
+import { App } from './App';
 import { ErrorBoundary } from '@/components/ErrorBoundary.tsx';
 
 const ErrorBoundaryError: FC<{ error: unknown }> = ({ error }) => (

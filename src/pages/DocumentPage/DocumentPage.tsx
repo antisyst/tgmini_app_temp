@@ -4,7 +4,6 @@ import { AppRoot, Section, Image, FixedLayout, Text, InlineButtons } from '@tele
 import './DocumentPage.scss';
 import IconInbox from '../../assets/icon_inbox.svg';
 import IconOutBox from '../../assets/icon_outbox.svg';
-// import AddIcon from '../../assets/plus-square.svg';
 
 const DocumentPage: React.FC = () => {
   return (
