@@ -23,16 +23,21 @@ const StartPage: React.FC = () => {
   return (
     <AppRoot>
       <FixedLayout vertical="top" className="full-screen">
-          <motion.div
-            initial={{ opacity: 0, scale: 0.8 }}
-            animate={{ opacity: 1, scale: 1 }}
-            className='logo-container'
-            transition={{ duration: 0.2, ease: 'easeInOut' }}
-          >
-            <img src={MainLogo} alt="App Logo"/>
-          </motion.div>
+        <motion.div
+          initial={{ opacity: 0, scale: 0.8 }}
+          animate={{ opacity: 1, scale: 1 }}
+          className="logo-container"
+          transition={{ duration: 0.5, ease: 'easeInOut' }}
+          style={{ marginBottom: '30px' }}
+        >
+          <img src={MainLogo} alt="App Logo" style={{ width: '250px', height: '250px' }} />
+        </motion.div>
         <FixedLayout vertical="bottom" className="button-layout">
-          <Button className="start-button" onClick={handleStart} style={{ background: '#1375FA', height: '58px' }}>
+          <Button 
+            className="start-button" 
+            onClick={handleStart} 
+            style={{ background: '#1375FA', height: '58px', marginBottom: '30px' }}
+          >
             {loading ? <Spinner size="m" className='spinner'/> : 'Начать'}
           </Button>
         </FixedLayout>
