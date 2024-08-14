@@ -8,10 +8,27 @@ hr {
   display: none;
 }
 
+.screen-layout {
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
 .loader-container {
   display: flex;
   justify-content: center;
   align-items: center;
   height: 100vh; 
   width: 100vw; 
+}
+
+.spinner {
+  color: #ffff;
+  margin-top: 4px;
+}
+
+div {
+  background: transparent;
 }

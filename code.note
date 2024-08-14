@@ -1,0 +1,413 @@
+components/App.tsx:
+
+import React, { useEffect, useMemo } from 'react';
+import { Navigate, Route, Router, Routes } from 'react-router-dom';
+import { useIntegration } from '@telegram-apps/react-router-integration';
+import {
+  bindMiniAppCSSVars,
+  bindThemeParamsCSSVars,
+  bindViewportCSSVars,
+  initNavigator,
+  useLaunchParams,
+  useMiniApp,
+  useThemeParams,
+  useViewport,
+} from '@telegram-apps/sdk-react';
+import { AppRoot, Progress } from '@telegram-apps/telegram-ui';
+import { routes } from '@/navigation/routes.tsx';
+import { usePreloadImages } from '@/hooks/usePreloadImages';
+import MainLogo from '../assets/logo.svg';
+
+export const App: React.FC = () => {
+  const launchParams = useLaunchParams();
+  const miniApp = useMiniApp();
+  const themeParams = useThemeParams();
+  const viewport = useViewport();
+
+  const { progress, loaded } = usePreloadImages([MainLogo]);
+
+  useEffect(() => {
+    bindMiniAppCSSVars(miniApp, themeParams);
+    bindThemeParamsCSSVars(themeParams);
+    if (viewport) {
+      bindViewportCSSVars(viewport);
+    }
+  }, [miniApp, themeParams, viewport]);
+
+  const navigator = useMemo(() => initNavigator('app-navigation-state'), []);
+  const [location, reactNavigator] = useIntegration(navigator);
+
+  useEffect(() => {
+    navigator.attach();
+    return () => navigator.detach();
+  }, [navigator]);
+
+  if (!launchParams || !miniApp || !themeParams || !loaded) {
+    return (
+      <AppRoot>
+        <Progress value={progress} />
+      </AppRoot>
+    );
+  }
+
+  return (
+    <AppRoot appearance={miniApp.isDark ? 'dark' : 'light'} platform={['macos', 'ios'].includes(launchParams.platform) ? 'ios' : 'base'}>
+      <Router location={location} navigator={reactNavigator}>
+        <Routes>
+          {routes.map((route) => (
+            <Route key={route.path} {...route} />
+          ))}
+          <Route path="*" element={<Navigate to="/" />} />
+        </Routes>
+      </Router>
+    </AppRoot>
+  );
+};
+
+export default App;
+
+usePreloadImages.ts:
+
+import { useState, useEffect } from 'react';
+
+export const usePreloadImages = (imageUrls: string[]) => {
+  const [progress, setProgress] = useState(0);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    const totalImages = imageUrls.length;
+
+    const loadImage = (url: string) => {
+      return new Promise<void>((resolve, reject) => {
+        const img = new Image();
+        img.src = url;
+        img.onload = () => {
+          if (isMounted) {
+            setProgress((prevProgress) => prevProgress + (100 / totalImages));
+          }
+          resolve();
+        };
+        img.onerror = () => reject(new Error(`Failed to load image: ${url}`));
+      });
+    };
+
+    Promise.all(imageUrls.map(loadImage))
+      .then(() => {
+        if (isMounted) setLoaded(true);
+      })
+      .catch((error) => {
+        console.error(error);
+        if (isMounted) setLoaded(true); 
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [imageUrls]);
+
+  return { progress, loaded };
+};
+
+index.tsx:
+
+import ReactDOM from 'react-dom/client';
+
+import { Root } from '@/components/Root';
+
+// Uncomment this import in case, you would like to develop the application even outside
+// the Telegram application, just in your browser.
+import './mockEnv.ts';
+
+import '@telegram-apps/telegram-ui/dist/styles.css';
+import './index.scss';
+
+ReactDOM.createRoot(document.getElementById('root')!).render(<Root/>);
+
+src/pages/StartPage.tsx:
+
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import MainLogo from '../../assets/logo.svg';
+import { AppRoot, Section, Image, Button, FixedLayout, Spinner } from '@telegram-apps/telegram-ui';
+import { useHapticFeedback } from '@telegram-apps/sdk-react';
+import { motion } from 'framer-motion';
+import './StartPage.scss';
+
+const StartPage: React.FC = () => {
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+  const hapticFeedback = useHapticFeedback();
+
+  const handleStart = () => {
+    setLoading(true);
+    hapticFeedback.impactOccurred('medium');
+    setTimeout(() => {
+      setLoading(false);
+      navigate('/registration');
+    }, 1000);
+  };
+
+  return (
+    <AppRoot>
+      <FixedLayout vertical="top" className="full-screen">
+        <Section className="logo-container">
+          <motion.div
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.5, ease: 'easeInOut' }}
+          >
+            <Image src={MainLogo} alt="App Logo"/>
+          </motion.div>
+        </Section>
+        <FixedLayout vertical="bottom" className="button-layout">
+          <Button className="start-button" onClick={handleStart} style={{ background: '#1375FA', height: '58px' }}>
+            {loading ? <Spinner size="m" className='spinner'/> : 'Начать'}
+          </Button>
+        </FixedLayout>
+      </FixedLayout>
+    </AppRoot>
+  );
+};
+
+export default StartPage;
+
+src/pages/RegistrationPage.tsx:
+
+import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { motion } from 'framer-motion';
+import {
+  AppRoot,
+  FixedLayout,
+  Section,
+  Text,
+  Input,
+  Button,
+  Caption,
+  Headline,
+  Spinner
+} from '@telegram-apps/telegram-ui';
+import { useHapticFeedback } from '@telegram-apps/sdk-react';
+import checkIcon from '../../assets/checked.svg';
+import errorIcon from '../../assets/wrong.svg';
+import './RegistrationPage.scss';
+
+const validateName = (name: string) => /^[A-ZА-ЯЁ][a-zа-яё]+\s[A-ZА-ЯЁ][a-zа-яё]+$/.test(name);
+const validatePhoneNumber = (number: string) => /^(\+7|7|8)?[\s-]?\(?\d{3}\)?[\s-]?\d{3}[\s-]?\d{2}[\s-]?\d{2}$/.test(number);
+const validateEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+const validateINN = (inn: string) => /^\d{12}$/.test(inn);
+
+const RegistrationPage: React.FC = () => {
+  const [formData, setFormData] = useState({
+    name: '',
+    phone: '',
+    email: '',
+    inn: '',
+  });
+
+  const [formErrors, setFormErrors] = useState({
+    name: false,
+    phone: false,
+    email: false,
+    inn: false,
+  });
+
+  const [loading, setLoading] = useState(false);
+  const navigate = useNavigate();
+  const hapticFeedback = useHapticFeedback();
+
+  const handleChange = (field: string, value: string) => {
+    setFormData((prevData) => ({
+      ...prevData,
+      [field]: value,
+    }));
+
+    switch (field) {
+      case 'name':
+        setFormErrors((prevErrors) => ({
+          ...prevErrors,
+          name: !validateName(value),
+        }));
+        break;
+      case 'phone':
+        setFormErrors((prevErrors) => ({
+          ...prevErrors,
+          phone: !validatePhoneNumber(value),
+        }));
+        break;
+      case 'email':
+        setFormErrors((prevErrors) => ({
+          ...prevErrors,
+          email: !validateEmail(value),
+        }));
+        break;
+      case 'inn':
+        setFormErrors((prevErrors) => ({
+          ...prevErrors,
+          inn: !validateINN(value),
+        }));
+        break;
+      default:
+        break;
+    }
+  };
+
+  const handleSubmit = () => {
+    const errors = {
+      name: !validateName(formData.name),
+      phone: !validatePhoneNumber(formData.phone),
+      email: !validateEmail(formData.email),
+      inn: !validateINN(formData.inn),
+    };
+    setFormErrors(errors);
+
+    const hasErrors = Object.values(errors).some((error) => error);
+    if (!hasErrors) {
+      setLoading(true);
+      hapticFeedback.impactOccurred('medium'); // Trigger haptic feedback
+      setTimeout(() => {
+        setLoading(false);
+        navigate('/documents');
+      }, 1000);
+    }
+  };
+
+  const getStatusIcon = (hasError: boolean) => {
+    return (
+      <motion.img
+        src={hasError ? errorIcon : checkIcon}
+        alt={hasError ? 'Error' : 'Checked'}
+        className="status-icon"
+        initial={{ opacity: 0, scale: 0.8 }}
+        animate={{ opacity: 1, scale: 1 }}
+        exit={{ opacity: 0, scale: 0.8 }}
+        transition={{ duration: 0.3, ease: 'easeInOut' }}
+      />
+    );
+  };
+
+  return (
+    <AppRoot>
+      <FixedLayout vertical="top" className="full-screen">
+        <Section className='register-layout'>
+          <Section className='register-content'>
+            <Headline weight="3" Component={'h1'}>Регистрация</Headline>
+          </Section>
+          <Section className="form-body">
+            <Section className="form-item">
+              <Text weight="3" Component="span" className="input-label">
+                Введите вашу Ф.И.О
+              </Text>
+              <Input
+                placeholder="Иванов Иван Иванович"
+                className={`form-input ${formErrors.name ? 'error' : ''}`}
+                value={formData.name}
+                onChange={(e) => handleChange('name', e.currentTarget.value)}
+                after={formData.name && getStatusIcon(formErrors.name)}
+              />
+            </Section>
+            <Section className="form-item">
+              <Text weight="3" Component="span" className="input-label">
+                Введите ваш номер телефона
+              </Text>
+              <Input
+                placeholder="+7 (000) 000 00 00"
+                className={`form-input ${formErrors.phone ? 'error' : ''}`}
+                value={formData.phone}
+                onChange={(e) => handleChange('phone', e.currentTarget.value)}
+                after={formData.phone && getStatusIcon(formErrors.phone)}
+              />
+            </Section>
+            <Section className="form-item">
+              <Text weight="3" Component="span" className="input-label">
+                Введите ваш e-mail
+              </Text>
+              <Input
+                placeholder="e-mail"
+                className={`form-input ${formErrors.email ? 'error' : ''}`}
+                value={formData.email}
+                onChange={(e) => handleChange('email', e.currentTarget.value)}
+                after={formData.email && getStatusIcon(formErrors.email)}
+              />
+            </Section>
+            <Section className="form-item">
+              <Text weight="3" Component="span" className="input-label">
+                Введите ИНН
+              </Text>
+              <Input
+                placeholder="ИНН"
+                className={`form-input ${formErrors.inn ? 'error' : ''}`}
+                value={formData.inn}
+                onChange={(e) => handleChange('inn', e.currentTarget.value)}
+                after={formData.inn && getStatusIcon(formErrors.inn)}
+              />
+              {formErrors.inn && (
+                <Caption level="1" Component="p" style={{ color: 'red' }}>
+                  Количество цифр должно быть ровно 12
+                </Caption>
+              )}
+            </Section>
+          </Section>
+        </Section>
+        <FixedLayout vertical="bottom" className="bottom-data">
+          <Section className="agree-data">
+            <Caption level="1" Component="p">
+              Нажимая на кнопку “Продолжить” я даю согласие на
+              <span style={{ color: '#3586FF', marginLeft: '5px' }}>
+                обработку персональных данных
+              </span>
+            </Caption>
+          </Section>
+          <Button
+            className="start-button"
+            style={{ background: '#1375FA', height: '58px' }}
+            onClick={handleSubmit}
+          >
+            {loading ? <Spinner size="m" /> : 'Начать'}
+          </Button>
+        </FixedLayout>
+      </FixedLayout>
+    </AppRoot>
+  );
+};
+
+export default RegistrationPage;
+
+src/pages/DocumentPage.tsx:
+
+import React from 'react';
+import MainLogo from '../../assets/logo.svg';
+import { AppRoot, Section, Image, FixedLayout, Text, InlineButtons } from '@telegram-apps/telegram-ui';
+import './DocumentPage.scss';
+import IconInbox from '../../assets/icon_inbox.svg';
+import IconOutBox from '../../assets/icon_outbox.svg';
+
+const DocumentPage: React.FC = () => {
+  return (
+    <AppRoot>
+      <FixedLayout vertical="top" className="full-document-screen">
+        <Section className="logo-container">
+          <Section>
+            <Image src={MainLogo} alt="App Logo" className="document-logo" />
+          </Section>
+        </Section>
+        <Section className="new-contract-section">
+          <InlineButtons mode="plain" className='docs-buttons'>
+            <InlineButtons.Item className='docs-button'>
+              <Image src={IconInbox} alt="Inbox Icon" />
+              <Text weight='3'>Входящие</Text>
+            </InlineButtons.Item>
+            <InlineButtons.Item className='docs-button'>
+              <Image src={IconOutBox} alt="Outbox Icon" />
+              <Text weight='3'>Исходящие</Text>
+            </InlineButtons.Item>
+          </InlineButtons>
+        </Section>
+      </FixedLayout>
+    </AppRoot>
+  );
+};
+
+export default DocumentPage;
+

@@ -1,15 +1,14 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
   AppRoot,
   FixedLayout,
-  Section,
-  Text,
   Input,
   Button,
   Caption,
   Headline,
+  Text,
   Spinner
 } from '@telegram-apps/telegram-ui';
 import { useHapticFeedback } from '@telegram-apps/sdk-react';
@@ -40,6 +39,7 @@ const RegistrationPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const hapticFeedback = useHapticFeedback();
+  const containerRef = useRef<HTMLDivElement>(null);
 
   const handleChange = (field: string, value: string) => {
     setFormData((prevData) => ({
@@ -89,11 +89,21 @@ const RegistrationPage: React.FC = () => {
     const hasErrors = Object.values(errors).some((error) => error);
     if (!hasErrors) {
       setLoading(true);
-      hapticFeedback.impactOccurred('medium'); // Trigger haptic feedback
+      hapticFeedback.impactOccurred('medium');
       setTimeout(() => {
         setLoading(false);
         navigate('/documents');
       }, 1000);
+    }
+  };
+
+  const handleContainerClick = (e: React.MouseEvent) => {
+    // Close the keyboard if the user clicks outside of the input fields
+    if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+      const activeElement = document.activeElement as HTMLElement;
+      if (activeElement && activeElement.blur) {
+        activeElement.blur();
+      }
     }
   };
 
@@ -113,82 +123,87 @@ const RegistrationPage: React.FC = () => {
 
   return (
     <AppRoot>
-      <FixedLayout vertical="top" className="full-screen">
-        <Section className='register-layout'>
-          <Section className='register-content'>
+      <FixedLayout vertical="top" className="full-screen" onClick={handleContainerClick}>
+        <div className='register-layout' ref={containerRef}>
+          <div className='register-content'>
             <Headline weight="3" Component={'h1'}>Регистрация</Headline>
-          </Section>
-          <Section className="form-body">
-            <Section className="form-item">
-              <Text weight="3" Component="span" className="input-label">
+          </div>
+          <div className="form-body">
+            <div className="form-item">
+              <Caption weight="3" Component="span" className="input-label">
                 Введите вашу Ф.И.О
-              </Text>
-              <Input
-                placeholder="Иванов Иван Иванович"
-                className={`form-input ${formErrors.name ? 'error' : ''}`}
-                value={formData.name}
-                onChange={(e) => handleChange('name', e.currentTarget.value)}
-                after={formData.name && getStatusIcon(formErrors.name)}
-              />
-            </Section>
-            <Section className="form-item">
-              <Text weight="3" Component="span" className="input-label">
+              </Caption>
+              <div className="form-input-wrapper">
+                <Input
+                  placeholder="Иванов Иван Иванович"
+                  className={`form-input ${formErrors.name ? 'error' : ''}`}
+                  value={formData.name}
+                  onChange={(e) => handleChange('name', e.currentTarget.value)}
+                  after={formData.name && getStatusIcon(formErrors.name)}
+                />
+              </div>
+            </div>
+            <div className="form-item">
+              <Caption weight="3" Component="span" className="input-label">
                 Введите ваш номер телефона
-              </Text>
-              <Input
-                placeholder="+7 (000) 000 00 00"
-                className={`form-input ${formErrors.phone ? 'error' : ''}`}
-                value={formData.phone}
-                onChange={(e) => handleChange('phone', e.currentTarget.value)}
-                after={formData.phone && getStatusIcon(formErrors.phone)}
-              />
-            </Section>
-            <Section className="form-item">
-              <Text weight="3" Component="span" className="input-label">
+              </Caption>
+              <div className="form-input-wrapper">
+                <Input
+                  placeholder="+7 (000) 000 00 00"
+                  className={`form-input ${formErrors.phone ? 'error' : ''}`}
+                  value={formData.phone}
+                  onChange={(e) => handleChange('phone', e.currentTarget.value)}
+                  after={formData.phone && getStatusIcon(formErrors.phone)}
+                />
+              </div>
+            </div>
+            <div className="form-item">
+              <Caption weight="3" Component="span" className="input-label">
                 Введите ваш e-mail
-              </Text>
-              <Input
-                placeholder="e-mail"
-                className={`form-input ${formErrors.email ? 'error' : ''}`}
-                value={formData.email}
-                onChange={(e) => handleChange('email', e.currentTarget.value)}
-                after={formData.email && getStatusIcon(formErrors.email)}
-              />
-            </Section>
-            <Section className="form-item">
-              <Text weight="3" Component="span" className="input-label">
+              </Caption>
+              <div className="form-input-wrapper">
+                <Input
+                  placeholder="e-mail"
+                  className={`form-input ${formErrors.email ? 'error' : ''}`}
+                  value={formData.email}
+                  onChange={(e) => handleChange('email', e.currentTarget.value)}
+                  after={formData.email && getStatusIcon(formErrors.email)}
+                />
+              </div>
+            </div>
+            <div className="form-item">
+              <Caption weight="3" Component="span" className="input-label">
                 Введите ИНН
-              </Text>
-              <Input
-                placeholder="ИНН"
-                className={`form-input ${formErrors.inn ? 'error' : ''}`}
-                value={formData.inn}
-                onChange={(e) => handleChange('inn', e.currentTarget.value)}
-                after={formData.inn && getStatusIcon(formErrors.inn)}
-              />
+              </Caption>
+              <div className="form-input-wrapper">
+                <Input
+                  placeholder="ИНН"
+                  className={`form-input ${formErrors.inn ? 'error' : ''}`}
+                  value={formData.inn}
+                  onChange={(e) => handleChange('inn', e.currentTarget.value)}
+                  after={formData.inn && getStatusIcon(formErrors.inn)}
+                />
+              </div>
               {formErrors.inn && (
                 <Caption level="1" Component="p" style={{ color: 'red' }}>
                   Количество цифр должно быть ровно 12
                 </Caption>
               )}
-            </Section>
-          </Section>
-        </Section>
+            </div>
+          </div>
+        </div>
         <FixedLayout vertical="bottom" className="bottom-data">
-          <Section className="agree-data">
-            <Caption level="1" Component="p">
-              Нажимая на кнопку “Продолжить” я даю согласие на
-              <span style={{ color: '#3586FF', marginLeft: '5px' }}>
-                обработку персональных данных
-              </span>
-            </Caption>
-          </Section>
+          <div className="agree-data">
+            <Text Component="p" className='agree-content'>
+              Нажимая на кнопку “Продолжить” я даю согласие на  <span>  обработку персональных данных </span>
+            </Text>
+          </div>
           <Button
             className="start-button"
             style={{ background: '#1375FA', height: '58px' }}
             onClick={handleSubmit}
           >
-            {loading ? <Spinner size="m" /> : 'Начать'}
+            {loading ? <Spinner size="m" className='spinner' /> : 'Начать'}
           </Button>
         </FixedLayout>
       </FixedLayout>

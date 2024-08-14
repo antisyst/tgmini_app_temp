@@ -10,6 +10,7 @@ import {
   useMiniApp,
   useThemeParams,
   useViewport,
+  useHapticFeedback,
 } from '@telegram-apps/sdk-react';
 import { AppRoot, Progress } from '@telegram-apps/telegram-ui';
 import { routes } from '@/navigation/routes.tsx';
@@ -21,6 +22,7 @@ export const App: React.FC = () => {
   const miniApp = useMiniApp();
   const themeParams = useThemeParams();
   const viewport = useViewport();
+  const hapticFeedback = useHapticFeedback();
 
   const { progress, loaded } = usePreloadImages([MainLogo]);
 
@@ -30,7 +32,10 @@ export const App: React.FC = () => {
     if (viewport) {
       bindViewportCSSVars(viewport);
     }
-  }, [miniApp, themeParams, viewport]);
+
+    // Trigger haptic feedback on initial load
+    hapticFeedback.impactOccurred('medium');
+  }, [miniApp, themeParams, viewport, hapticFeedback]);
 
   const navigator = useMemo(() => initNavigator('app-navigation-state'), []);
   const [location, reactNavigator] = useIntegration(navigator);
@@ -49,7 +54,7 @@ export const App: React.FC = () => {
   }
 
   return (
-    <AppRoot appearance={miniApp.isDark ? 'dark' : 'light'} platform={['macos', 'ios'].includes(launchParams.platform) ? 'ios' : 'base'}>
+    <AppRoot appearance={miniApp.isDark ? 'dark' : 'light'} platform={['macos', 'ios'].includes(launchParams.platform) ? 'ios' : 'base'} className='screen-layout'>
       <Router location={location} navigator={reactNavigator}>
         <Routes>
           {routes.map((route) => (

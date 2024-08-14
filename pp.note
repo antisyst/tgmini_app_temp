@@ -1345,15 +1345,16 @@ import {
   bindMiniAppCSSVars,
   bindThemeParamsCSSVars,
   bindViewportCSSVars,
-  initNavigator, useLaunchParams,
+  initNavigator,
+  useLaunchParams,
   useMiniApp,
   useThemeParams,
   useViewport,
 } from '@telegram-apps/sdk-react';
-import { AppRoot, Spinner } from '@telegram-apps/telegram-ui';
+import { AppRoot, Progress } from '@telegram-apps/telegram-ui';
 import { routes } from '@/navigation/routes.tsx';
-import * as TelegramUI from '@telegram-apps/telegram-ui';
-
+import { usePreloadImages } from '@/hooks/usePreloadImages';
+import MainLogo from '../assets/logo.svg';
 
 export const App: React.FC = () => {
   const launchParams = useLaunchParams();
@@ -1361,48 +1362,34 @@ export const App: React.FC = () => {
   const themeParams = useThemeParams();
   const viewport = useViewport();
 
-  // Bind CSS variables for theming and viewport
+  const { progress, loaded } = usePreloadImages([MainLogo]);
+
   useEffect(() => {
     bindMiniAppCSSVars(miniApp, themeParams);
-  }, [miniApp, themeParams]);
-
-  useEffect(() => {
     bindThemeParamsCSSVars(themeParams);
-  }, [themeParams]);
-
-  useEffect(() => {
     if (viewport) {
       bindViewportCSSVars(viewport);
     }
-  }, [viewport]);
+  }, [miniApp, themeParams, viewport]);
 
-  // Initialize navigator
   const navigator = useMemo(() => initNavigator('app-navigation-state'), []);
   const [location, reactNavigator] = useIntegration(navigator);
 
-  // Attach navigator for controlling history and back button state
   useEffect(() => {
     navigator.attach();
     return () => navigator.detach();
   }, [navigator]);
 
-  // Loading state management (if required)
-  if (!launchParams || !miniApp || !themeParams) {
+  if (!launchParams || !miniApp || !themeParams || !loaded) {
     return (
       <AppRoot>
-        <Spinner size='l' />
+        <Progress value={progress} />
       </AppRoot>
     );
   }
 
-  console.log(TelegramUI);
-
-
   return (
-    <AppRoot
-      appearance={miniApp.isDark ? 'dark' : 'light'}
-      platform={['macos', 'ios'].includes(launchParams.platform) ? 'ios' : 'base'}
-    >
+    <AppRoot appearance={miniApp.isDark ? 'dark' : 'light'} platform={['macos', 'ios'].includes(launchParams.platform) ? 'ios' : 'base'}>
       <Router location={location} navigator={reactNavigator}>
         <Routes>
           {routes.map((route) => (
@@ -1416,6 +1403,49 @@ export const App: React.FC = () => {
 };
 
 export default App;
+
+usePreloadImages.ts:
+
+import { useState, useEffect } from 'react';
+
+export const usePreloadImages = (imageUrls: string[]) => {
+  const [progress, setProgress] = useState(0);
+  const [loaded, setLoaded] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    const totalImages = imageUrls.length;
+
+    const loadImage = (url: string) => {
+      return new Promise<void>((resolve, reject) => {
+        const img = new Image();
+        img.src = url;
+        img.onload = () => {
+          if (isMounted) {
+            setProgress((prevProgress) => prevProgress + (100 / totalImages));
+          }
+          resolve();
+        };
+        img.onerror = () => reject(new Error(`Failed to load image: ${url}`));
+      });
+    };
+
+    Promise.all(imageUrls.map(loadImage))
+      .then(() => {
+        if (isMounted) setLoaded(true);
+      })
+      .catch((error) => {
+        console.error(error);
+        if (isMounted) setLoaded(true); 
+      });
+
+    return () => {
+      isMounted = false;
+    };
+  }, [imageUrls]);
+
+  return { progress, loaded };
+};
 
 index.tsx:
 
@@ -1438,14 +1468,18 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import MainLogo from '../../assets/logo.svg';
 import { AppRoot, Section, Image, Button, FixedLayout, Spinner } from '@telegram-apps/telegram-ui';
+import { useHapticFeedback } from '@telegram-apps/sdk-react';
+import { motion } from 'framer-motion';
 import './StartPage.scss';
 
 const StartPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const hapticFeedback = useHapticFeedback();
 
   const handleStart = () => {
     setLoading(true);
+    hapticFeedback.impactOccurred('medium');
     setTimeout(() => {
       setLoading(false);
       navigate('/registration');
@@ -1456,7 +1490,13 @@ const StartPage: React.FC = () => {
     <AppRoot>
       <FixedLayout vertical="top" className="full-screen">
         <Section className="logo-container">
-          <Image src={MainLogo} alt="App Logo"/>
+          <motion.div
+            initial={{ opacity: 0, scale: 0.8 }}
+            animate={{ opacity: 1, scale: 1 }}
+            transition={{ duration: 0.5, ease: 'easeInOut' }}
+          >
+            <Image src={MainLogo} alt="App Logo"/>
+          </motion.div>
         </Section>
         <FixedLayout vertical="bottom" className="button-layout">
           <Button className="start-button" onClick={handleStart} style={{ background: '#1375FA', height: '58px' }}>
@@ -1486,6 +1526,7 @@ import {
   Headline,
   Spinner
 } from '@telegram-apps/telegram-ui';
+import { useHapticFeedback } from '@telegram-apps/sdk-react';
 import checkIcon from '../../assets/checked.svg';
 import errorIcon from '../../assets/wrong.svg';
 import './RegistrationPage.scss';
@@ -1512,6 +1553,7 @@ const RegistrationPage: React.FC = () => {
 
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
+  const hapticFeedback = useHapticFeedback();
 
   const handleChange = (field: string, value: string) => {
     setFormData((prevData) => ({
@@ -1558,10 +1600,10 @@ const RegistrationPage: React.FC = () => {
     };
     setFormErrors(errors);
 
-    // Check if any errors exist
     const hasErrors = Object.values(errors).some((error) => error);
     if (!hasErrors) {
       setLoading(true);
+      hapticFeedback.impactOccurred('medium'); // Trigger haptic feedback
       setTimeout(() => {
         setLoading(false);
         navigate('/documents');
@@ -1678,7 +1720,6 @@ import { AppRoot, Section, Image, FixedLayout, Text, InlineButtons } from '@tele
 import './DocumentPage.scss';
 import IconInbox from '../../assets/icon_inbox.svg';
 import IconOutBox from '../../assets/icon_outbox.svg';
-// import AddIcon from '../../assets/plus-square.svg';
 
 const DocumentPage: React.FC = () => {
   return (
@@ -1707,3 +1748,89 @@ const DocumentPage: React.FC = () => {
 };
 
 export default DocumentPage;
+
+
+Root.tsx:
+
+import { SDKProvider } from '@telegram-apps/sdk-react';
+import { type FC } from 'react';
+
+import { App } from './App';
+import { ErrorBoundary } from '@/components/ErrorBoundary.tsx';
+
+const ErrorBoundaryError: FC<{ error: unknown }> = ({ error }) => (
+  <div>
+    <p>An unhandled error occurred:</p>
+    <blockquote>
+      <code>
+        {error instanceof Error
+          ? error.message
+          : typeof error === 'string'
+            ? error
+            : JSON.stringify(error)}
+      </code>
+    </blockquote>
+  </div>
+);
+
+const Inner: FC = () => {
+
+  return (
+      <SDKProvider acceptCustomStyles>
+        <App/>
+      </SDKProvider>
+  );
+};
+
+export const Root: FC = () => (
+  <ErrorBoundary fallback={ErrorBoundaryError}>
+    <Inner/>
+  </ErrorBoundary>
+);
+
+ErrorBoundary.tsx:
+
+import {
+  Component,
+  type ComponentType,
+  type GetDerivedStateFromError,
+  type PropsWithChildren,
+  type ReactNode,
+} from 'react';
+
+export interface ErrorBoundaryProps extends PropsWithChildren {
+  fallback?: ReactNode | ComponentType<{ error: unknown }>;
+}
+
+interface ErrorBoundaryState {
+  error?: unknown;
+}
+
+export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
+  state: ErrorBoundaryState = {};
+
+  // eslint-disable-next-line max-len
+  static getDerivedStateFromError: GetDerivedStateFromError<ErrorBoundaryProps, ErrorBoundaryState> = (error) => ({ error });
+
+  componentDidCatch(error: Error) {
+    this.setState({ error });
+  }
+
+  render() {
+    const {
+      state: {
+        error,
+      },
+      props: {
+        fallback: Fallback,
+        children,
+      },
+    } = this;
+
+    return 'error' in this.state
+      ? typeof Fallback === 'function'
+        ? <Fallback error={error} />
+        : Fallback
+      : children;
+  }
+}
