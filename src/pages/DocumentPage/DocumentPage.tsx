@@ -10,9 +10,7 @@ const DocumentPage: React.FC = () => {
     <AppRoot>
       <FixedLayout vertical="top" className="full-document-screen">
         <Section className="logo-container">
-          <Section>
-            <Image src={MainLogo} alt="App Logo" className="document-logo" />
-          </Section>
+            <img src={MainLogo} alt="App Logo" className="document-logo" />
         </Section>
         <Section className="new-contract-section">
           <InlineButtons mode="plain" className='docs-buttons'>
