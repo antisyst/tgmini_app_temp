@@ -16,7 +16,11 @@ import checkIcon from '../../assets/checked.svg';
 import errorIcon from '../../assets/wrong.svg';
 import './RegistrationPage.scss';
 
-const validateName = (name: string) => /^[A-ZА-ЯЁ][a-zа-яё]+\s[A-ZА-ЯЁ][a-zа-яё]+\s[A-ZА-ЯЁ][a-zа-яё]+$/.test(name);
+const validateName = (name: string) => {
+  const wordCount = name.trim().split(/\s+/).length;
+  return (wordCount === 2 || wordCount === 3) && /^[A-ZА-ЯЁ][a-zа-яё]+(\s[A-ZА-ЯЁ][a-zа-яё]+)+$/.test(name);
+};
+
 const validatePhoneNumber = (number: string) => /^\+7\s\(\d{3}\)\s\d{3}-\d{2}-\d{2}$/.test(number); // Format as +7 (XXX) XXX-XX-XX
 const validateEmail = (email: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
 const validateINN = (inn: string) => /^\d{12}$/.test(inn);
@@ -201,6 +205,11 @@ const RegistrationPage: React.FC = () => {
                   after={formData.name && getStatusIcon(formErrors.name, formData.name, 'name')}
                 />
               </div>
+              {formErrors.name && (
+                <Caption level="1" Component="p" style={{ color: 'red' }}>
+                  Ф.И.О должно состоять из 2 или 3 слов
+                </Caption>
+              )}
             </div>
             <div className="form-item">
               <Caption weight="3" Component="span" className="input-label">
