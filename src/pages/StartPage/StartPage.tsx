@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import MainLogo from '../../assets/logo.svg';
 import { AppRoot, Section, Image, Button, FixedLayout, Spinner } from '@telegram-apps/telegram-ui';
-import { useHapticFeedback, useBackButton } from '@telegram-apps/sdk-react';
+import { useHapticFeedback } from '@telegram-apps/sdk-react';
 import { motion } from 'framer-motion';
 import './StartPage.scss';
 
@@ -10,7 +10,6 @@ const StartPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const hapticFeedback = useHapticFeedback();
-  const backButton = useBackButton();
 
   const handleStart = () => {
     setLoading(true);
@@ -20,17 +19,6 @@ const StartPage: React.FC = () => {
       navigate('/registration');
     }, 1000);
   };
-
-  useEffect(() => {
-    backButton.show(); 
-    backButton.on('click', () => {
-      navigate(-1); 
-    });
-
-    return () => {
-      backButton.hide(); 
-    };
-  }, [backButton, navigate]);
 
   return (
     <AppRoot>

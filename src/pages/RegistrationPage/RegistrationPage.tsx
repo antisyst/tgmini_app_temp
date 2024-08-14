@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import {
@@ -12,7 +12,7 @@ import {
   Headline,
   Spinner
 } from '@telegram-apps/telegram-ui';
-import { useHapticFeedback, useCloudStorage } from '@telegram-apps/sdk-react';
+import { useHapticFeedback } from '@telegram-apps/sdk-react';
 import checkIcon from '../../assets/checked.svg';
 import errorIcon from '../../assets/wrong.svg';
 import './RegistrationPage.scss';
@@ -40,19 +40,6 @@ const RegistrationPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const navigate = useNavigate();
   const hapticFeedback = useHapticFeedback();
-  const cloudStorage = useCloudStorage();
-
-  useEffect(() => {
-    const loadUserData = async () => {
-      const savedData = await cloudStorage.get(['name', 'phone', 'email', 'inn']);
-      setFormData((prevData) => ({
-        ...prevData,
-        ...savedData,
-      }));
-    };
-
-    loadUserData();
-  }, [cloudStorage]);
 
   const handleChange = (field: string, value: string) => {
     setFormData((prevData) => ({
@@ -90,7 +77,7 @@ const RegistrationPage: React.FC = () => {
     }
   };
 
-  const handleSubmit = async () => {
+  const handleSubmit = () => {
     const errors = {
       name: !validateName(formData.name),
       phone: !validatePhoneNumber(formData.phone),
@@ -102,13 +89,7 @@ const RegistrationPage: React.FC = () => {
     const hasErrors = Object.values(errors).some((error) => error);
     if (!hasErrors) {
       setLoading(true);
-      hapticFeedback.impactOccurred('medium'); 
-
-      await cloudStorage.set('name', formData.name);
-      await cloudStorage.set('phone', formData.phone);
-      await cloudStorage.set('email', formData.email);
-      await cloudStorage.set('inn', formData.inn);
-
+      hapticFeedback.impactOccurred('medium'); // Trigger haptic feedback
       setTimeout(() => {
         setLoading(false);
         navigate('/documents');
